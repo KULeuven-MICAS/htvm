@@ -2,14 +2,12 @@
 
 This folder contains all files related to Sirius development
 
+---
+
 ## Installation
 Specific installation instructions are put here.
 It closely resembles https://tvm.apache.org/docs/install/from_source.html yet with some recommendations and other Sirius-specifics.
 We are assuming you are installing on a linux machine.
-
----
-
-# Install from Source
 
 This page gives instructions on how to build and install the TVM package from
 scratch on various systems. It consists of two steps:
@@ -17,7 +15,7 @@ scratch on various systems. It consists of two steps:
 1. First build the shared library from the C++ codes (`libtvm.so` for linux).
 2. Setup for the language packages (e.g. Python Package).
 
-## Developers: Get Source from Gitlab
+### Developers: Get Source from Gitlab
 
 Clone the git repository from gitlab.
 It is important to clone the submodules along, with ``--recursive`` option.
@@ -31,7 +29,7 @@ Or clone with https:
 ```
 
 
-## Build the Shared Library
+### Build the Shared Library
 
 Our goal is to build the shared libraries on Linux (the target library are `libtvm.so`)
 These instructions are specific to Ubuntu or Ubuntu-derived distributions.
@@ -62,9 +60,8 @@ A Sirius-specific one is provided in this folder, .
       cmake ..
       make -j4
   ```
-If everything goes well, we can go to :ref:`python-package-installation`
 
-## Python package installation
+### Python package installation
 
 In this step we will install the TVM python package
 
@@ -82,13 +79,13 @@ This environment has to be activated every time you open a new terminal.
 ```bash
 pyenv activate tvm-sirius
 ```
-The python package is located at `tvm/python`
+The python package is located at `tvm/python`.
 We can now install the python package by using:
 Install TVM python bindings by `setup.py`:
 ```bash
 cd python; python setup.py install; cd ..
 ```
-Python dependencies that also need to be installed
+Other python dependencies also need to be installed:
 ```bash
-pip3 install numpy decorator attrs
+pip3 install -r sirius/requirements.txt
 ```
