@@ -14,7 +14,13 @@
 <!--- KIND, either express or implied.  See the License for the -->
 <!--- specific language governing permissions and limitations -->
 <!--- under the License. -->
+Sirius fork of TVM
+------------------
+This is a fork of the tvm project at https://github.com/apache/tvm @commit  2af3ab1e36e0e78bac8448a0357abee317fabb1f
 
+Sirius-specific files and documentation are covered in the `sirius` folder.
+
+---
 <img src=https://raw.githubusercontent.com/apache/tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
 ==============================================
 [Documentation](https://tvm.apache.org/docs) |
