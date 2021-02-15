@@ -16,7 +16,7 @@
 <!--- under the License. -->
 Sirius fork of TVM
 ------------------
-This is a fork of the tvm project at https://github.com/apache/tvm @commit  2af3ab1e36e0e78bac8448a0357abee317fabb1f
+This is a fork of the tvm project at https://github.com/apache/tvm on commit  2af3ab1e36e0e78bac8448a0357abee317fabb1f
 
 Sirius-specific files and documentation are covered in the `sirius` folder.
 
