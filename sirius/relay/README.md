@@ -131,6 +131,13 @@ lib.get_source()
 # This results in runtime errors (failing compilation) and will halt your script.
 lib.export_library(file_name="shared_library.so",workspace_dir="workspace_directory")
 ```
-### *microTVM only* - Compile the C code and flash to device
+### *microTVM only* - Compile the C code, Flash the device and run the model
 
-After creating C code for the microcontroller, you want to compile the C
+After creating C code for the microcontroller, you want to compile the C code.
+This is contained in the tvm micro package, but only has support for Zephyr RTOS supported development boards.
+```python
+import tvm.micro
+
+micro_bin = tvm.micro.build_static_runtime(workspace, compiler, compiled_model, **opts)
+```
+For the use of this feature i refer to the [uTVM tutorial](https://github.com/areusch/microtvm-blogpost-eval/blob/master/tutorial/standalone_utvm.ipynb)
