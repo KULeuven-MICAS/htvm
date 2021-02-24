@@ -211,6 +211,7 @@ class Device(ctypes.Structure):
         12: "ext_dev",
         14: "hexagon",
         15: "webgpu",
+        100: "sirius",
     }
     STR2MASK = {
         "llvm": 1,
@@ -231,6 +232,7 @@ class Device(ctypes.Structure):
         "ext_dev": 12,
         "hexagon": 14,
         "webgpu": 15,
+        "sirius": 100,
     }
 
     def __init__(self, device_type, device_id):
