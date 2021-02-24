@@ -416,6 +416,15 @@ TVM_REGISTER_TARGET_KIND("hybrid", kDLCPU)  // line break
 TVM_REGISTER_TARGET_KIND("composite", kDLCPU)  // line break
     .add_attr_option<Array<Target>>("devices");
 
+// Registering a target kind for sirius, based on c host.
+TVM_REGISTER_TARGET_KIND("sirius", kDLCPU)
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<Bool>("link-params", Bool(false))
+    .add_attr_option<String>("runtime")
+    .add_attr_option<String>("mcpu")
+    .add_attr_option<String>("march")
+    .set_default_keys({"cpu"});
+
 /**********  Registry  **********/
 
 TVM_REGISTER_GLOBAL("target.TargetKindGetAttr")
