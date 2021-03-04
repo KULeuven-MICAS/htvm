@@ -90,7 +90,7 @@ def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
 def schedule_injective_sirius(_, outs, target):
     """schedule injective ops for arm cpu"""
     logger.warning("Using arm implementation for injective op")
-    return topi.arm_cpu.schedule_injective(outs)
+    return topi.sirius.schedule_injective(outs)
 
 
 ##################################### MAIN #####################################
