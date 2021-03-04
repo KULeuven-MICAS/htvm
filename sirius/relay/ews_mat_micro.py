@@ -33,13 +33,15 @@ module = module.from_expr(sum_expr)
 # runtime=c     --> build code for the TVM C runtime (i.e. the bare-metal compatible one)
 # link-params   --> link supplied model parameters as constants in the generated code
 # system-lib    --> Build a "system library." In deployments, the system library is pre-loaded into the runtime, rather than a library that needs to be loaded e.g. from a file. This is the simplest configuration for a bare-metal microcontroller, so we use it here.
-target = tvm.target.Target("c -march=rv32imf -link-params -runtime=c -system-lib=1 ")
+# target = tvm.target.Target("c -march=rv32imf -link-params -runtime=c -system-lib=1 ")
 
 # Optimize (?)  and build the relay code:
 with tvm.transform.PassContext(opt_level=3, config={'tir.disable_vectorize':True}):
     #graph_json, compiled_model, simplified_params = relay.build(module, target=target)
-    lib = relay.build(module, target=target)
+    lib = relay.build(module, target="sirius")
 
 # All necessary c-files are copied to the workspace but some headers might be missing.
 # This results in runtime errors (failing compilation) and will halt your script.
-lib.export_library(file_name="compiled_lib.so",workspace_dir="path_to_workspace_directory")
+
+file_name = "ews.so"
+lib.export_library(file_name,workspace_dir="/tmp/")
