@@ -19,6 +19,7 @@
 
 # Internal imports 
 from tvm import te  # Used for schedule manipulations
+from ..utils import is_empty_shape # Used for schedule_injective
 
 ################################### CLASSES ####################################
 
