@@ -85,6 +85,13 @@ def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
 
 # _op.register_strategy("conv2d_NCHWc", conv2d_NCHWc_strategy_sirius)
 
+@schedule_injective.register(["cpu"], override=True)
+# Will fail for cpu target if override is not set to True (Default=False)
+def schedule_injective_sirius(_, outs, target):
+    """schedule injective ops for arm cpu"""
+    logger.warning("Using arm implementation for injective op")
+    return topi.arm_cpu.schedule_injective(outs)
+
 
 ##################################### MAIN #####################################
 
