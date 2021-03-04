@@ -18,7 +18,7 @@
 
 
 # Internal imports 
-# Your imports within this package go here 
+from tvm import te  # Used to manipulate FTVMSchedules and FTVMComputes
 
 ################################### CLASSES ####################################
 
@@ -26,7 +26,26 @@
 
 ################################## FUNCTIONS ###################################
 
-# Your functions go here 
+def schedule_conv2d_nchw(outs):
+    """Schedule for conv2d_nchw, specialized for SIRIUS.
+
+    Parameters
+    ----------
+    outs: Array of Tensor
+          The computation graph description of conv2d_nchw
+          in the format of an array of tensors.
+
+    Returns
+    -------
+    schedule: Schedule
+        The computation schedule for the op.
+    """
+    # We start from TVM's default schedule
+    schedule = te.create_schedule([x.op for x in outs])
+    # Debug message
+    print("Using sirius schedule")
+    # Returning the built schedule
+    return schedule
 
 ##################################### MAIN #####################################
 
