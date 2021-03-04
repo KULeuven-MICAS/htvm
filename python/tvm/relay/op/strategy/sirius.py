@@ -60,7 +60,7 @@ def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
     logger.warning("Using generic implementation for conv2d_NCHWc.generic")
     strategy.add_implementation(
         wrap_compute_conv2d(topi.nn.conv2d_NCHWc, True, True),
-        wrap_topi_schedule(topi.generic.schedule_conv2d_NCHWc),
+        wrap_topi_schedule(topi.sirius.schedule_conv2d_nchw),
         name="conv2d_NCHWc.generic",
     )
     return strategy
