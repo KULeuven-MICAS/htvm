@@ -20,6 +20,7 @@
 # Internal imports 
 # Using this file as a proxy.
 from .conv2d import *
+from .injective import *
 
 ################################### CLASSES ####################################
 
