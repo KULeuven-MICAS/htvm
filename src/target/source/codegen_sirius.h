@@ -36,6 +36,12 @@ class CodeGenSirius final : public CodeGenC {
   // Sets up the compiler for the new module.
   void Init(bool output_ssa);
 
+  // Used to set the return types of our functions to int32_t.
+  void PrintFuncPrefix();
+
+  // Used to return 0 when the function successfully exits.
+  void PrintFinalReturn();
+
   // We are temporarily masking the code generation for assertion nodes since
   // it uses functions that won't be available on the Sirius platform.
   void VisitStmt_(const AssertStmtNode* op) final;
