@@ -29,6 +29,8 @@ void CodeGenSirius::Init(bool output_ssa) {
   // Adding includes for the TVM types.
   decl_stream << "#include \"tvm/runtime/c_runtime_api.h\"" << std::endl;
   decl_stream << "#include \"tvm/runtime/c_backend_api.h\"" << std::endl;
+  // Including the soma hardware acceleration library.
+  decl_stream << "#include <soma.h>" << std::endl;
   decl_stream << "#include <math.h>" << std::endl;
   // Adding a newline for the style.
   decl_stream << std::endl;
