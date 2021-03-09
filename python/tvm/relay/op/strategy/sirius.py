@@ -89,8 +89,9 @@ def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
 # Will fail for cpu target if override is not set to True (Default=False)
 def schedule_injective_sirius(_, outs, target):
     """schedule injective ops for arm cpu"""
-    logger.warning("Using arm implementation for injective op")
-    return topi.sirius.schedule_injective(outs)
+    logger.warning("Using SIRIUS implementation for injective op")
+    with target:
+        return topi.sirius.schedule_injective(outs)
 
 
 ##################################### MAIN #####################################
