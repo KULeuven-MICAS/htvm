@@ -8,7 +8,6 @@ from __future__ import absolute_import, print_function
 
 import tvm
 from tvm import te
-from tir import 
 
 
 def intrin_ews(ro,co,data_type):
