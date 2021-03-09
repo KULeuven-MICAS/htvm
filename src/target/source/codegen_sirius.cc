@@ -52,6 +52,18 @@ void CodeGenSirius::AddFunction(const PrimFunc& f) {
 	CodeGenC::AddFunction(f);
 }
 
+void CodeGenSirius::PrintFuncPrefix() {
+  // Adapted from CodeGenCHost, this makes it so that our functions have return type int32_t. The declaration of a function is never indented.
+  stream << "TVM_DLL int32_t";
+}
+
+void CodeGenSirius::PrintFinalReturn() {
+  // Taken from CodeGenCHost, this makes it so that the functions return 0 when the successfully exit.
+  this->PrintIndent();
+  stream << "return 0;\n";
+}
+
+
 Array<String> CodeGenSirius::GetFunctionNames() {
 	// Return the names of the functions added to this module.
 	return function_names_;
@@ -66,8 +78,8 @@ void CodeGenSirius::VisitExpr_(const CallNode* op, std::ostream& os) {
   // Implementation of the missing functions from CodeGenC, copied from CodeGenCHost.
   if (op->op.same_as(builtin::tvm_throw_last_error())) {
     this->PrintIndent();
-    // Sirius doesn't yet have a clear way to deal with errors.
-    this->stream << "return;\n";
+    // We return -1 to signal an error to our caller.
+    this->stream << "return -1;\n";
   } else {
     CodeGenC::VisitExpr_(op, os);
   }
