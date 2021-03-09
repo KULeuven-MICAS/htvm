@@ -10,7 +10,7 @@ import tvm
 from tvm import te
 
 
-def intrin_ews(ro,co,data_type):
+def intrin_ews(ro,co,data_type,stride):
     a = te.placeholder((ro,co), dtype=data_type, name="a")
     b = te.placeholder((ro,co), dtype=data_type, name="b")
     c = te.compute((ro,co), lambda i,j: a[i,j] + b[i,j], name="c")
@@ -23,10 +23,11 @@ def intrin_ews(ro,co,data_type):
 
     # Define buffers
     # Offset factor --> optimize for vectorized buffering
-    # TODO make strides variable!
-    Ab = tvm.tir.decl_buffer(a.shape, a.dtype, name="A", offset_factor=1, strides=[4,1])
-    Bb = tvm.tir.decl_buffer(b.shape, b.dtype, name="B", offset_factor=1, strides=[4,1])
-    Cb = tvm.tir.decl_buffer(c.shape, c.dtype, name="C", offset_factor=1, strides=[4,1])
+    # Strides are set by the factors that appear near the i.inner and j.inner
+    # In this case i.inner corresponds to the columnn dimension of the tensor, so:
+    Ab = tvm.tir.decl_buffer(a.shape, a.dtype, name="A", offset_factor=1, strides=[stride,1])
+    Bb = tvm.tir.decl_buffer(b.shape, b.dtype, name="B", offset_factor=1, strides=[stride,1])
+    Cb = tvm.tir.decl_buffer(c.shape, c.dtype, name="C", offset_factor=1, strides=[stride,1])
 
     def intrin_func(ins, outs):
         # create IR builder
@@ -50,27 +51,37 @@ def intrin_ews(ro,co,data_type):
 
     return te.decl_tensor_intrin(c.op, intrin_func, binds={a: Ab, b: Bb, c: Cb})
 
-
+# Dimensions of tensorization
 rows = 2
 cols = 2
 data_type = "float32"
 # Create an instance
-intrinsic = intrin_ews(rows,cols,data_type)
 
-ro = 4
-co = 4
+
+# Dimensions of tensor to be tensorized
+ro = 26
+co = 26
+dim1 = 6
+dim2 = 2
 # Create a tensorizable schedule
-A = te.placeholder((ro,co), dtype=data_type, name="A")
-B = te.placeholder((ro,co), dtype=data_type, name="B")
-C = te.compute((ro,co), lambda i,j: A[i,j] + B[i,j], name="C")
+A = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="A")
+B = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="B")
+C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="C")
 # Create a vanilla schedule
 s = te.create_schedule(C.op)
-xo, yo, xi, yi = s[C].tile(C.op.axis[0], C.op.axis[1],x_factor=2,y_factor=2)
+print("Larger schedule to apply tensorization of the Generic Schedule (before tiling):")
+print("==============================================================================")
+print(tvm.lower(s, [A, B, C], simple_mode=True))
+# indexing axes negatively to tile over two innermost axes
+xo, yo, xi, yi = s[C].tile(C.op.axis[-2], C.op.axis[-1],x_factor=2,y_factor=2)
 print("Larger schedule to apply tensorization of the Generic Schedule (after tiling):")
 print("==============================================================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
 # Tensorize!
-s[C].tensorize(xi, intrinsic)
+print(s[C].op.axis[-1])
+# Get extent of most innermost original axis to act as a stride parameter in the tensorized version
+stride = s[C].op.axis[-1].dom.extent
+s[C].tensorize(xi, intrin_ews(rows,cols,data_type,stride=stride))
 print("After tiling and applying the tensorization:")
 print("============================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
