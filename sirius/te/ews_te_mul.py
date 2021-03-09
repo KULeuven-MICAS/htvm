@@ -41,9 +41,9 @@ def intrin_ews(ro,co,data_type):
         # An expression that multiplies A and B.
         mul_expr = tir.Mul(A_read_expr, B_read_expr)
         # We build a statement that writes the multiplied values into the output buffer.
-        output_write_statement = output_buffer.vstore([0, 0], mul_expr)
+        C_write_statement = C.vstore([0, 0], mul_expr)
         # We return the expected statement.
-        return output_write_statement
+        return C_write_statement
 
     return te.decl_tensor_intrin(c.op, intrin_func, binds={a: Ab, b: Bb, c: Cb})
 
