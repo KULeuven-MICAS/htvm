@@ -65,10 +65,10 @@ data_type = "float32"
 
 
 # Dimensions of tensor to be tensorized
-ro = 26
-co = 26
-dim1 = 20
-dim2 = 32
+ro = 2
+co = 2
+dim1 = 1
+dim2 = 0
 # Create a tensorizable schedule
 A = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="A")
 B = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="B")
@@ -89,7 +89,7 @@ print(s[C].op.axis[-1])
 stride_innermost = s[C].op.axis[-1].dom.extent
 stride_outermost = s[C].op.axis[-2].dom.extent * s[C].op.axis[-1].dom.extent
 
-s[C].tensorize(yi, intrin_ews(width, data_type,stride_outermost=stride_outermost, stride_innermost=stride_innermost))
+s[C].tensorize(yi, intrin_ews_soma(width, data_type,stride_outermost=stride_outermost, stride_innermost=stride_innermost))
 print("After tiling and applying the tensorization:")
 print("============================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
