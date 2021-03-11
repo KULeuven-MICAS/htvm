@@ -12,7 +12,7 @@ import numpy as np
 # tensor_shape = (1,1,8,8)
 
 # Or create a 2D-matrix
-tensor_shape = (2,2)
+tensor_shape = (20,25,3)
 data_type = "int8"
 
 # Construct the variables --> tvm.relay.Var type
