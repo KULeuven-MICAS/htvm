@@ -77,15 +77,15 @@ def intrin_ews(ro,co,data_type,stride):
         cc = outs[0]
         ib.emit(
             tvm.tir.call_extern(
-                # TODO this code has to be changed to reflect the function in the hw-library!
-                "float32",
-                "ews",
-                cc.access_ptr("w"), # "w" Results in a "2" in the 5th access pointer field
+                "int32",
+                "soma_wrapped_ews",
                 aa.access_ptr("r"), # "r" Results in a "1" in the 5th access pointer field
                 bb.access_ptr("r"),
-                ro,
-                co,
-                bb.strides[0],
+                cc.access_ptr("w"), # "w" Results in a "2" in the 5th access pointer field
+                a.shape[0], # width
+                a.shape[1], # height
+                1,          # channels
+                8,          # precision
             )
         )
         return ib.get()
