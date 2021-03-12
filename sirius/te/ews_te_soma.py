@@ -8,6 +8,7 @@
 
 import tvm
 from tvm import te
+from tvm import topi
 
 
 def intrin_ews_soma(width, data_type, stride_outermost, stride_innermost):
@@ -65,17 +66,20 @@ data_type = "float32"
 
 
 # Dimensions of tensor to be tensorized
-ro = 2
-co = 2
-dim1 = 1
-dim2 = 0
+ro = 26
+co = 20
+dim1 = 14
+dim2 = 16
+
 # Create a tensorizable schedule
 A = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="A")
 B = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="B")
-C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="C")
+# C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="T_add")
+# Using topi.add implementation here to reflect schedule of relay graph
+C = topi.add(A, B)
 # Create a vanilla schedule
 s = te.create_schedule(C.op)
-print("Larger schedule to apply tensorization of the Generic Schedule (before tiling):")
+print("Larger schedule to apply tensorization of the Generic Schedule (before split):")
 print("==============================================================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
 # indexing axes negatively to tile over two innermost axes
@@ -90,6 +94,6 @@ stride_innermost = s[C].op.axis[-1].dom.extent
 stride_outermost = s[C].op.axis[-2].dom.extent * s[C].op.axis[-1].dom.extent
 
 s[C].tensorize(yi, intrin_ews_soma(width, data_type,stride_outermost=stride_outermost, stride_innermost=stride_innermost))
-print("After tiling and applying the tensorization:")
+print("After splitting and applying the tensorization:")
 print("============================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
