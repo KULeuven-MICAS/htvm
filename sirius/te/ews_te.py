@@ -8,7 +8,7 @@ from __future__ import absolute_import, print_function
 
 import tvm
 from tvm import te
-
+from tvm import topi
 
 def intrin_ews(ro,co,data_type,stride):
     a = te.placeholder((ro,co), dtype=data_type, name="a")
@@ -66,7 +66,9 @@ dim2 = 2
 # Create a tensorizable schedule
 A = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="A")
 B = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="B")
-C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="C")
+# C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="T_add")
+# Using topi.add implementation here to reflect schedule of relay graph
+C = topi.add(A,B)
 # Create a vanilla schedule
 s = te.create_schedule(C.op)
 print("Larger schedule to apply tensorization of the Generic Schedule (before tiling):")
