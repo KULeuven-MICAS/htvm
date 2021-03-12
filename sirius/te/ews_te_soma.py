@@ -10,7 +10,6 @@ import tvm
 from tvm import te
 from tvm import topi
 
-
 def intrin_ews_soma(width, data_type, stride_outermost, stride_innermost):
     # Make height and channels variable
     height = te.var(name="height")
@@ -29,8 +28,8 @@ def intrin_ews_soma(width, data_type, stride_outermost, stride_innermost):
     print(tvm.lower(preview, [a, b, c], simple_mode=True))
 
     # Define buffers
-    # Offset factor --> optimize for vectorized buffering
-    # Strides are set by the factors that appear near the indexing elements
+    # Offset factor --> so TVM can optimize for vectorized buffering
+    # Stride        --> see TVM discuss post above
     Ab = tvm.tir.decl_buffer(a.shape, a.dtype, name="A", offset_factor=1, strides=[stride_outermost, stride_innermost,1])
     Bb = tvm.tir.decl_buffer(b.shape, b.dtype, name="B", offset_factor=1, strides=[stride_outermost, stride_innermost,1])
     Cb = tvm.tir.decl_buffer(c.shape, c.dtype, name="C", offset_factor=1, strides=[stride_outermost, stride_innermost,1])
@@ -58,12 +57,9 @@ def intrin_ews_soma(width, data_type, stride_outermost, stride_innermost):
     return te.decl_tensor_intrin(c.op, intrin_func, binds={a: Ab, b: Bb, c: Cb})
 
 
-# Dimensions of tensorization
+# Dimensions of tensorization intrinsic
 width = 2
-cols = 2
-data_type = "float32"
-# Create an instance
-
+data_type = "int8"
 
 # Dimensions of tensor to be tensorized
 ro = 26
@@ -75,24 +71,26 @@ dim2 = 16
 A = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="A")
 B = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="B")
 # C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="T_add")
-# Using topi.add implementation here to reflect schedule of relay graph
+# Using topi.add implementation here to reflect schedule of relay graph instead of custom operation
 C = topi.add(A, B)
+
 # Create a vanilla schedule
 s = te.create_schedule(C.op)
 print("Larger schedule to apply tensorization of the Generic Schedule (before split):")
 print("==============================================================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
-# indexing axes negatively to tile over two innermost axes
+
+# indexing axes negatively to split over third innermost axis
 yo, yi = s[C].split(C.op.axis[-3], factor=2)
 print("Larger schedule to apply tensorization of the Generic Schedule (after split):")
 print("==============================================================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
-# Tensorize!
-print(s[C].op.axis[-1])
+
 # Get extent of most innermost original axis to act as a stride parameter in the tensorized version
 stride_innermost = s[C].op.axis[-1].dom.extent
 stride_outermost = s[C].op.axis[-2].dom.extent * s[C].op.axis[-1].dom.extent
 
+# Tensorize!
 s[C].tensorize(yi, intrin_ews_soma(width, data_type,stride_outermost=stride_outermost, stride_innermost=stride_innermost))
 print("After splitting and applying the tensorization:")
 print("============================================")
