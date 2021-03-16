@@ -44,19 +44,7 @@ def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
     target:
         sirius -keys=cpu -link-params=0
     """
-    print("Using the SIRIUS strategy!")
-    print("attrs:");
-    print(attrs)
-    # attrs fields are described in include/tvm/relay/nn.h
-    print("inputs:")
-    print(inputs)
-    print("out_type:")
-    print(out_type)
-    print("target:")
-    print(target)
-
     strategy = _op.OpStrategy()
-
     logger.warning("Using generic implementation for conv2d_NCHWc.generic")
     strategy.add_implementation(
         wrap_compute_conv2d(topi.nn.conv2d_NCHWc, True, True),
@@ -66,38 +54,13 @@ def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
     return strategy
 
 
-    # logger.warning("conv2d_NCHWc is not optimized for this platform.")
-    # strategy = _op.OpStrategy()
-    # if inputs[0].dtype == "int8" or inputs[0].dtype == "uint8":
-    #     strategy.add_implementation(
-    #         wrap_compute_conv2d(topi.nn.conv2d_NCHWc_int8, True, True),
-    #         wrap_topi_schedule(topi.generic.schedule_conv2d_NCHWc_int8),
-    #         name="conv2d_NCHWc_int8.sirius",
-    #     )
-    # else:
-    #     strategy.add_implementation(
-    #         wrap_compute_conv2d(topi.nn.conv2d_NCHWc, True, True),
-    #         wrap_topi_schedule(topi.generic.schedule_conv2d_NCHWc),
-    #         name="conv2d_NCHWc.sirius",
-    #     )
-    # return strategy
-
-
-# _op.register_strategy("conv2d_NCHWc", conv2d_NCHWc_strategy_sirius)
-
 @schedule_injective.register(["cpu"], override=True)
 # Will fail for cpu target if override is not set to True (Default=False)
 def schedule_injective_sirius(_, outs, target):
-    """schedule injective ops for arm cpu"""
-    logger.warning("Using SIRIUS implementation for injective op")
     with target:
         return topi.sirius.schedule_injective(outs)
 
 
-##################################### MAIN #####################################
-
 if __name__ == "__main__":
     # The code to run when this file is used as a script goes here
     pass
-
-##################################### EOF ######################################
