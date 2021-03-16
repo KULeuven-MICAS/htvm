@@ -1,0 +1,49 @@
+# Starting from Ubuntu 20.04
+FROM ubuntu:20.04
+# Updating apt
+RUN apt-get update
+# Installing ssh client
+RUN apt-get install -y openssh-client
+# Setting up the ssh development key
+RUN mkdir $HOME/.ssh
+COPY docker_ed25519 /root/.ssh/id_ed25519
+COPY docker_ed25519.pub /root/.ssh/id_ed25519.pub
+# Copying the ssh key for gitlab
+RUN ssh-keyscan -H gitlab.com >> $HOME/.ssh/known_hosts
+# Same for github
+RUN ssh-keyscan -H github.com >> $HOME/.ssh/known_hosts
+# Installing git and vim
+RUN apt-get install -y git vim
+
+# Setting values for tzdata
+ENV TZ=Europe/Paris
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+# Setting up dependancies for tvm
+RUN apt-get install -y python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev python3-pip llvm
+# Installing dependancies of the python package
+RUN pip3 install numpy decorator attrs scipy pytest
+
+# Moving inside home.
+WORKDIR "/"
+# Cloning tvm fork
+RUN git clone --recursive git@gitlab.com:JosseVanDelm/tvm-fork.git
+# Moving inside the tvm source code.
+WORKDIR "/tvm-fork"
+# Creating directory for built tvm library.
+RUN mkdir build
+# Copying CMake configuration
+RUN cp sirius/config.cmake build
+
+# Going to the build directory for compilation.
+WORKDIR "/tvm-fork/build"
+RUN cmake ..
+RUN make -j10
+
+# Setting the right environment values in the .bashrc
+RUN echo "export TVM_HOME=/tvm-fork\n" >> $HOME/.bashrc
+RUN echo "export PYTHONPATH=\$TVM_HOME/python:\$PYTHONPATH\n" >> $HOME/.bashrc
+
+# Adding useful commands to the bashrc
+RUN echo "function rebuild {\n\tcd \$TVM_HOME && git pull --ff && cd \$TVM_HOME/build && make -j10 && cd \$HOME\n}" >> $HOME/.bashrc
+# Setting the directory when entering the container back to the filesystem root
+WORKDIR "/"
