@@ -25,6 +25,8 @@ data_type = "int8"
 def intrin_pad(data_shape, filter_shape, stride=1, padding="SAME", dilation=1, out_dtype="int8"):
 
     # Hardcoding the values here
+    # Dimensions of tensor are not variable here as this doesn't allow for proper tensorization of the padding function
+
     stride_h = stride_w = stride
     dilation_h = dilation_w = dilation
     padding = "SAME"
@@ -64,25 +66,9 @@ def intrin_pad(data_shape, filter_shape, stride=1, padding="SAME", dilation=1, o
         padded_out = outs[0]
         ib.emit(
             tvm.tir.call_extern(
+                # This is an empty function that does nothing :o
                 "int32",
-                "soma_wrapped_padder",
-
-                #data_in.access_ptr("r"),
-                #kernel_in.access_ptr("r"),
-                #conv_out.access_ptr("w"),
-                #x,      #uint32_t w
-                #y,      #uint32_t h
-                #c,      #uint32_t c
-                #fx,     #uint32_t fx
-                #fy,     #uint32_t fy
-                #k,  #uint32_t k
-                #out_width, #uint32_t ox
-                #out_height, #uint32_t oy
-                #stride,      #uint32_t stride
-                8,      #uint32_t precision
-                0,      #uint32_t activation_function
-                0,      #uint32_t zero_padding
-                0,      #uint32_t shift_fixed_point
+                "soma_wrapped_padder"
             )
         )
         return ib.get()
@@ -177,23 +163,25 @@ def intrin_conv2d_hwlib(stride=1, padding="SAME", dilation=1, out_dtype="int8"):
             tvm.tir.call_extern(
                 "int32",
                 "soma_wrapped_conv2d",
-
                 data_in.access_ptr("r"),
                 kernel_in.access_ptr("r"),
                 conv_out.access_ptr("w"),
-                x,      #uint32_t w
-                y,      #uint32_t h
-                c,      #uint32_t c
-                fx,     #uint32_t fx
-                fy,     #uint32_t fy
-                k,  #uint32_t k
-                out_width, #uint32_t ox
-                out_height, #uint32_t oy
-                stride,      #uint32_t stride
-                8,      #uint32_t precision
-                0,      #uint32_t activation_function
-                0,      #uint32_t zero_padding
-                0,      #uint32_t shift_fixed_point
+                x,              # uint32_t w
+                y,              # uint32_t h
+                c,              # uint32_t c
+                fx,             # uint32_t fx
+                fy,             # uint32_t fy
+                k,              # uint32_t k
+                out_width,      # uint32_t ox
+                out_height,     # uint32_t oy
+                stride,         # uint32_t stride
+                8,              # uint32_t precision
+                0,              # uint32_t activation_function
+                # (Ox_padded - Ox)*(2**4) --> Ox_padded - Ox illustrates how much "padding" was needed to "fill" the PE array
+                # TODO remove hardcoded value for 0
+                # pad_left and pad_right should be equal!
+                pad_down*(2**12)+ pad_top*(2**8)+ 0 + pad_left,          # uint32_t zero_padding
+                0,              # uint32_t shift_fixed_point
             )
         )
         return ib.get()
@@ -214,7 +202,7 @@ print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 # Get padded tensor and tensorize padding
 schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0],intrin_pad(data_orig.shape, kernel_orig.shape))
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
-# Now also tensorize
+# Now also tensorize the conv2d operation without the padding
 schedule[conv2d].tensorize(schedule[conv2d].op.axis[1],intrin_conv2d_hwlib())
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 
