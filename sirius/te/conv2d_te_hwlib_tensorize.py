@@ -8,7 +8,6 @@ from tvm import topi
 from tvm.topi.nn.utils import get_pad_tuple
 from tvm.topi.nn.pad import pad
 
-from tvm.contrib import tedd
 # Tensor Dimensions
 
 B = 2       # Input batch (also called N sometimes)
@@ -119,13 +118,6 @@ def intrin_conv2d_hwlib(stride=1, padding="SAME", dilation=1, out_dtype="int8"):
     out_height = tvm.topi.nn.utils.simplify((in_height - dilated_kernel_h + pad_top + pad_down) // stride_h + 1)
     out_width = tvm.topi.nn.utils.simplify((in_width - dilated_kernel_w + pad_left + pad_right) // stride_w + 1)
 
-    # compute graph
-    pad_before = [0, 0, pad_top, pad_left]
-    pad_after = [0, 0, pad_down, pad_right]
-    print(pad_top)
-    print(pad_left)
-    print(pad_down)
-    print(pad_right)
     # Don't do padding here! TVM does not allow defining an intrinsic for nested compute ops :(
     #temp =  pad(input_data, pad_before, pad_after, name="pad_temp")
     padded = te.placeholder(padded_input_shp, dtype=out_dtype, name="padded_data")
