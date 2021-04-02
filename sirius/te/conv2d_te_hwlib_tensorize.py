@@ -26,6 +26,7 @@ def intrin_pad(data_shape, filter_shape, stride=1, padding="SAME", dilation=1, o
     # Hardcoding the values here
     # Dimensions of tensor are not variable here as this doesn't allow for proper tensorization of the padding function
 
+    data_type = out_dtype
     stride_h = stride_w = stride
     dilation_h = dilation_w = dilation
     padding = "SAME"
@@ -75,7 +76,7 @@ def intrin_pad(data_shape, filter_shape, stride=1, padding="SAME", dilation=1, o
                                                                    temp: output_data_buffer})
 
 
-def intrin_conv2d_hwlib(stride=1, padding="SAME", dilation=1, out_dtype="int8"):
+def intrin_conv2d_hwlib(data_shape, filter_shape, stride=1, padding="SAME", dilation=1, out_dtype="int8"):
     # This is essentially a copy of topi.nn.conv2d()
     #
     # Differences:
@@ -85,18 +86,13 @@ def intrin_conv2d_hwlib(stride=1, padding="SAME", dilation=1, out_dtype="int8"):
     #  * intrinsic expects no batch dimension, so batch dimension can be unrolled by tensorization.
     #  * TVM does not allow for nested intrinsic definition! This intrinsic assumes the input is already padded!
 
-    c = te.var(name="c")
-    x = te.var(name="x")
-    y = te.var(name="y")
-
-    fx = te.var(name="fx")
-    fy = te.var(name="fy")
-    k = te.var(name="k")
-
     # Hardcoding the values here
+    data_type = out_dtype
     stride_h = stride_w = stride
     dilation_h = dilation_w = dilation
     padding = "SAME"
+    _, c, y, x = data_shape
+    k, c, fy, fx = filter_shape
     input_shp = (1, c, y, x)
     filter_shp = (k,c,fy,fx)
     _, in_channel, in_height, in_width = input_shp
@@ -194,7 +190,7 @@ print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 # Get padded tensor and tensorize padding
 schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0],intrin_pad(data_orig.shape, kernel_orig.shape))
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
-# Now also tensorize the conv2d operation without the padding
-schedule[conv2d].tensorize(schedule[conv2d].op.axis[1],intrin_conv2d_hwlib())
+# Now also tensorize the  conv2d operation without the padding
+schedule[conv2d].tensorize(schedule[conv2d].op.axis[1],intrin_conv2d_hwlib(data_orig.shape, kernel_orig.shape))
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 
