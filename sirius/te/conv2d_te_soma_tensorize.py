@@ -1,17 +1,21 @@
 # This is a simple example of a CONV2D operation for SOMA
 
 
+# NOTE: This example is not further developed and likely contains a wrong conv2d implementation
+
+
 import tvm
 from tvm import te
 from tvm import topi
+from tvm.contrib import tedd
 
 
 # Tensor Dimensions
 
 B = 2       # Input batch (also called N sometimes)
 C = 3       # Input channels
-X = 224     # Input width (also called W sometimes)
-Y = 224     # Input height (also called H sometimes)
+X = 256     # Input width (also called W sometimes)
+Y = 256     # Input height (also called H sometimes)
 
 FX = 5      # Filter width
 FY = 5      # Filter height
@@ -33,9 +37,9 @@ def prepare_filter(filter, inner_dimension):
     assert (k % ki == 0), f"K size must be a multiple of {ki}"
     # "split" Kernel dimension K in two pieces Ko,Ki with reshape:
     ko = int(k / ki)
-    reshaped = topi.reshape(filter, (ko, ki, d_shp[1], d_shp[2], d_shp[3]))
+    reshaped_filter = topi.reshape(filter, (ko, ki, d_shp[1], d_shp[2], d_shp[3]))
     # New Kernel layout is Ko,Ki,C,Fx,Fy --> transpose to Ko,C,Fx,Fy,Ki
-    return topi.transpose(reshaped, (0, 2, 3, 4, 1))
+    return topi.transpose(reshaped_filter, (0, 2, 3, 4, 1))
 
 
 def prepare_data(data, inner_dimension):
@@ -51,14 +55,16 @@ def prepare_data(data, inner_dimension):
     assert (x % xi == 0), f"X size must be a multiple of {xi}"
     xo = int(x / xi)
     assert (xo % xi == 0), f"Xo size must be a multiple of {xi} too"
-    reshaped = topi.reshape(data, (d_shp[0], d_shp[1], d_shp[2], ko, ki))
+    reshaped_data = topi.reshape(data, (d_shp[0], d_shp[1], d_shp[2], xo, xi))
     # New Data layout is B,C,Y,Xo,Xi --> transpose to B,Y,Xo,C,Xi
-    return topi.transpose(reshaped, (0, 2, 3, 1, 4))
+    return topi.transpose(reshaped_data, (0, 2, 3, 1, 4))
 
 def intrin_conv2d(data_type,inner_dim):
 
+    # TODO make Xi and Xo
     c = te.var(name="c")
-    x = te.var(name="x")
+    xo = te.var(name="xo")
+    xi = te.var(name="xi")
     y = te.var(name="y")
 
     fx = te.var(name="fx")
@@ -66,18 +72,19 @@ def intrin_conv2d(data_type,inner_dim):
     ko = te.var(name="ko")
     ki = inner_dim
 
-    data = te.placeholder((c, y, x), dtype=data_type, name="data")
+    data = te.placeholder((y, xo, c, xi), dtype=data_type, name="data")
     kernel = te.placeholder((ko, c, fy, fx, ki), dtype=data_type, name="kernel")
 
     rc = te.reduce_axis((0, c), name="rc")
     rfy = te.reduce_axis((0, fy), name="rfy")
     rfx = te.reduce_axis((0, fx), name="rfx")
 
-    conv_soma = te.compute((ko, y-fy+1, x-fx+1, ki),
-                           lambda koko, yy, xx, kiki: te.sum(
-                               data[rc,
-                                    yy + rfy,
-                                    xx + rfx].astype(data_type)
+    conv_soma = te.compute((ko, y-fy+1, xo,xi-fx+1, ki),
+                           lambda koko, yy, xoxo, xixi, kiki: te.sum(
+                               data[yy + rfy,
+                                    xoxo,
+                                    rc,
+                                    xixi + rfx].astype(data_type)
                                * kernel[koko,
                                         rc,
                                         rfy,
@@ -99,19 +106,23 @@ def intrin_conv2d(data_type,inner_dim):
     def intrin_func(ins,outs):
         ib = tvm.tir.ir_builder.create()
         data_in, kernel_in = ins
-        conv_out = outs
+        conv_out = outs[0]
         ib.emit(
             tvm.tir.call_extern(
                 "int32",
                 "soma_wrapped_conv2d",
-                x,      #uint32_t w
+                #TODO add pointers to data, filter and output tensors
+                data_in.access_ptr("r"),
+                kernel_in.access_ptr("r"),
+                conv_out.access_ptr("w"),
+                xi*xo,      #uint32_t w
                 y,      #uint32_t h
                 c,      #uint32_t c
                 fx,     #uint32_t fx
                 fy,     #uint32_t fy
                 ki*ko,  #uint32_t k
-                y-fy+1, #uint32_t ox
-                x-fx+1, #uint32_t oy
+                xo*xi-fx+1, #uint32_t ox
+                y-fy+1, #uint32_t oy
                 1,      #uint32_t stride
                 8,      #uint32_t precision
                 0,      #uint32_t activation_function
@@ -132,8 +143,9 @@ data_orig = te.placeholder((B,C,Y,X),dtype=data_type, name="data_orig")
 kernel_orig = te.placeholder((K,C,FY,FX), dtype=data_type, name="kernel_orig")
 # Four dimensional tensor goes in, five dimensional tensor comes out
 kernel_prepared = prepare_filter(kernel_orig, intrinsic_size)
+data_prepared = prepare_data(data_orig, intrinsic_size)
 
-in_batch, in_channel, in_height, in_width = data_orig.shape
+in_batch, in_height, in_width_outer, in_channel, in_width_inner = data_prepared.shape
 num_filter_outer, channel, kernel_h, kernel_w, num_filter_inner = kernel_prepared.shape
 
 rc = te.reduce_axis((0, in_channel), name="rfc")
@@ -143,12 +155,14 @@ rfx = te.reduce_axis((0, kernel_w), name="rfx")
 conv = te.compute((in_batch,
                    num_filter_outer,
                    in_height - kernel_h + 1,
-                   in_width - kernel_w + 1,
+                   in_width_outer,
+                   in_width_inner - kernel_w + 1,
                    num_filter_inner,),
-                  lambda b, ko, y, x, ki: te.sum( data_orig[in_batch,
-                                                            rc,
-                                                            y + rfy,
-                                                            x + rfx].astype(data_type)
+                  lambda b, ko, y, xo, xi, ki: te.sum(data_prepared[in_batch,
+                                                                   y + rfy,
+                                                                   xo,
+                                                                   rc,
+                                                                   xi + rfx].astype(data_type)
                                                   * kernel_prepared[ko,
                                                                     rc,
                                                                     rfy,
@@ -169,6 +183,9 @@ print("Schedule after tensorization")
 print("============================")
 print(tvm.lower(tensorize_me, [data_orig, kernel_orig], simple_mode=True))
 
-lib = tvm.build(tensorize_me,[data_orig, kernel_orig],target_host="sirius")
+tedd.viz_dataflow_graph(tensorize_me, dot_file_path="/tmp/dataflow.dot")
+tedd.viz_schedule_tree(tensorize_me, dot_file_path="/tmp/schedule_tree.dot")
+
+lib = tvm.build(tensorize_me, [data_orig, kernel_orig], target_host="sirius")
 file_name = "conv2d_soma.so"
-lib.export_library(file_name,workspace_dir="/tmp/")
+lib.export_library(file_name, workspace_dir="/tmp/")
