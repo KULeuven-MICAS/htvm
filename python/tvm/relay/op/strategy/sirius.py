@@ -31,7 +31,7 @@ from .. import op as _op
 ################################## FUNCTIONS ###################################
 
 
-@conv2d_strategy.register("cpu")
+@conv2d_strategy.register(["cpu"])
 def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     strategy = _op.OpStrategy()
     logger.warning("Using SIRIUS conv2d strategy")
@@ -42,20 +42,25 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
-    if padding != "SAME":
+
+    # Make sure padding is matched to kernel dimensions so that output tensor has same size
+    test_same_h_padding = padding[0] == padding[2] == kernel.shape[2]//2
+    test_same_w_padding = padding[1] == padding[3] == kernel.shape[3]//2
+
+    if not test_same_w_padding and test_same_h_padding:
         raise NotImplementedError("Padding other than SAME not supported")
 
     if layout == "NCHW":
         if kernel_layout == "OIHW":
             strategy.add_implementation(
-                wrap_compute_conv2d(topi.nn.conv2d_nchw, True, True),
-                wrap_topi_schedule(topi.sirius.schedule_conv2d)
+                wrap_compute_conv2d(topi.nn.conv2d_nchw),
+                wrap_topi_schedule(topi.sirius.schedule_conv2d_nchw)
             )
         else:
             raise NotImplementedError(f"Data Layout:{layout}: Kernel layout{kernel_layout} not supported")
     else:
         raise NotImplementedError(f"Data layout{layout} not supported")
-
+    return strategy
 
 
 # conv2d_NCHWc
