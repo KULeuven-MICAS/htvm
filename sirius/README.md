@@ -32,11 +32,7 @@ Or clone with https:
 ### Build the Shared Library
 
 Our goal is to build the shared libraries on Linux (the target library are `libtvm.so`)
-These instructions are specific to Ubuntu or Ubuntu-derived distributions.
-```bash
-    sudo apt-get update
-    sudo apt-get install -y python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev
-```
+
 The minimal building requirements are
 
 - A recent c++ compiler supporting C++ 14 (g++-5 or higher)
@@ -44,6 +40,18 @@ The minimal building requirements are
 - We highly recommend to build with LLVM to enable all the features.
 - ~~If you want to use CUDA, CUDA toolkit version >= 8.0 is required. If you are upgrading from an older version, make sure you purge the older version and reboot after installation.~~ We don't need CUDA.
 
+If you'd like to use `conda` (`anaconda` or `miniconda`) you can create a local development environment (on linux machines) by installing the following packages
+```bash
+    conda create -n tvm
+    conda activate tvm
+    conda install python setuptools libedit libxml2 cmake zlib gcc_linux-64 gxx_linux-64 libllvm llvm llvm-tools llvmdev 
+```
+
+On Ubuntu or Ubuntu-derived distributions these dependencies can be obtained by executing these commands.
+```bash
+    sudo apt-get update
+    sudo apt-get install -y python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev
+```
 We use cmake to build the library.
 The configuration of TVM can be modified by `config.cmake`.
 
