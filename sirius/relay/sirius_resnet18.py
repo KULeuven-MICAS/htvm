@@ -8,7 +8,7 @@ print(resnet18_mod)
 
 # build
 with tvm.transform.PassContext(opt_level=3, config={'tir.disable_vectorize':True}):
-    resnet18_lib = relay.build(resnet18_mod, "llvm", params=resnet18_params)
+    resnet18_lib = relay.build(resnet18_mod, "sirius", params=resnet18_params)
 
 # path lib
 file_name = "resnet.so"
