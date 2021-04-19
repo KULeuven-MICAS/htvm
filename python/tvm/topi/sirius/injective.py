@@ -73,23 +73,26 @@ def schedule_injective(outs):
     s = te.create_schedule([x.op for x in outs])
     # Try to tensorize the operators in this schedule
     for x in outs:
+        # Check if tensorization is applicable
+        if x.op.name != "T_add":
+            # No intrinsic available :( ; just use vanilla schedule:
+            logger.warning(f'{x.op.name}: No supported intrinsic available')
+            continue
         if len(x.shape) < 3:
             # Not enough dimensions to unroll over; just use vanilla schedule:
+            # TODO, reshape so this is possible for tensors with too few dimensions?
             logger.warning(f'{x.op.name}: too few tensor dimensions to tensorize: shape = {x.shape}')
             continue
         else:
-            if x.op.name == "T_add":  # Use element_wise sum intrinsic here!
-                yo, yi = s[x].split(x.op.axis[-3], factor=ELEMENT_WISE_SIZE)
-                stride_innermost = s[x].op.axis[-1].dom.extent
-                stride_outermost = s[x].op.axis[-2].dom.extent * s[x].op.axis[-1].dom.extent
-                s[x].tensorize(yi, intrin_ews_soma(ELEMENT_WISE_SIZE,
-                                                   x.dtype,
-                                                   stride_outermost=stride_outermost,
-                                                   stride_innermost=stride_innermost))
-                continue
-            else:  # No intrinsic available :( ; just use vanilla schedule:
-                logger.warning(f'{x.op.name}: No supported intrinsic available')
-                continue
+            # Tensorize!
+            yo, yi = s[x].split(x.op.axis[-3], factor=ELEMENT_WISE_SIZE)
+            stride_innermost = s[x].op.axis[-1].dom.extent
+            stride_outermost = s[x].op.axis[-2].dom.extent * s[x].op.axis[-1].dom.extent
+            s[x].tensorize(yi, intrin_ews_soma(ELEMENT_WISE_SIZE,
+                                               x.dtype,
+                                               stride_outermost=stride_outermost,
+                                               stride_innermost=stride_innermost))
+            continue
     # TODO: Find out why we have to do this :D
     te.schedule.AutoInlineInjective(s)
     return s
