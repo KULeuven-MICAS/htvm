@@ -13,8 +13,6 @@ with tvm.transform.PassContext(opt_level=3, config={'tir.disable_vectorize':True
 # path lib
 file_name = "resnet.so"
 
-print(resnet18_mod)
-
 # Getting module
 module = resnet18_lib.get_lib()
 
