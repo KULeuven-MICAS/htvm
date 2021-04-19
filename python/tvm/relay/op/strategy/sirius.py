@@ -41,17 +41,17 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     padding = attrs.get_int_tuple("padding")
     groups = attrs.groups
     layout = attrs.data_layout
+    data_dtype = data.dtype
+    kernel_dtype = kernel.dtype
     kernel_layout = attrs.kernel_layout
-    """
     # These prints are useful for debugging
     print(f"inputs:{inputs}")
     print(f"dilations h:{dilation_h} w:{dilation_w}")
     print(f"strides h:{stride_h} w:{stride_w}")
-    print(f"data layout = {layout}")
-    print(f"kernel layout = {kernel_layout}")
+    print(f"data   layout = {layout}: type = {data_dtype}")
+    print(f"kernel layout = {kernel_layout}: type = {kernel_dtype}")
     print(f"padding = {padding}")
     print(f"groups = {groups}")
-    """
 
     """
     Test if tensorization is applicable. Otherwise use default strategy
@@ -64,25 +64,33 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     * data_layout = NCHW
     """
 
-    # Make sure padding is matched to kernel dimensions so that output tensor has same size
-    # padding tuple can be specified in multiple ways
-    if len(padding) == 4:
-        test_same_h_padding = padding[0] == padding[2] == kernel.shape[2]//2
-        test_same_w_padding = padding[1] == padding[3] == kernel.shape[3]//2
-    else: #len(padding) == 2:
-        test_same_h_padding = padding[0] == kernel.shape[2]//2
-        test_same_w_padding = padding[1] == kernel.shape[3]//2
-
     if (data.dtype != "int8") and (kernel.dtype != "int8"):
         return fallback_default_conv2d(strategy)
-    if not (test_same_w_padding and test_same_h_padding):
-        return fallback_default_conv2d(strategy)
+
     if layout == "NCHW":
         if kernel_layout == "OIHW":
-            logger.warning("SIRIUS Tensorization approach")
+            # Make sure padding is matched to kernel dimensions so that output tensor has same size
+            # padding tuple can be specified in multiple ways
+            if len(padding) == 4:
+                test_same_h_padding = padding[0] == padding[2] == kernel.shape[2]//2
+                test_same_w_padding = padding[1] == padding[3] == kernel.shape[3]//2
+            else: #len(padding) == 2:
+                test_same_h_padding = padding[0] == kernel.shape[2]//2
+                test_same_w_padding = padding[1] == kernel.shape[3]//2
+            if not (test_same_w_padding and test_same_h_padding):
+                return fallback_default_conv2d(strategy)
+            logger.warning("SIRIUS conv2d Tensorization approach")
             strategy.add_implementation(
                 wrap_compute_conv2d(topi.nn.conv2d_nchw),
                 wrap_topi_schedule(topi.sirius.schedule_conv2d_nchw)
+            )
+    # Ugly workaround for https://discuss.tvm.apache.org/t/incompatible-broadcast-issue-simple-test-case/3856
+    elif layout == "NHWC":
+        if kernel_layout == "HWOI":
+            logger.warning("SIRIUS conv2d: using HWOI fallback schedule")
+            strategy.add_implementation(
+                wrap_compute_conv2d(topi.arm_cpu.conv2d_direct_simd),
+                wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_direct_simd)
             )
         else:
             return fallback_default_conv2d(strategy)
@@ -94,12 +102,12 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
 def fallback_default_conv2d(strategy):
     logger.warning("SIRIUS conv2d: operation not supported: using fallback")
     strategy.add_implementation(
-        #wrap_compute_conv2d(topi.nn.conv2d, need_data_layout=True),
-        #wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+        wrap_compute_conv2d(topi.nn.conv2d, need_data_layout=True),
+        wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
         #wrap_compute_conv2d(topi.x86.conv2d_nchw),
         #wrap_topi_schedule(topi.x86.schedule_conv2d_nchw)
-        wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_spatial_pack),
-        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_spatial_pack)
+        #wrap_compute_conv2d(topi.arm_cpu.conv2d_direct_simd),
+        #wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_direct_simd)
     )
     return strategy
 # conv2d_NCHWc
@@ -131,8 +139,8 @@ def fallback_default_conv2d(strategy):
 def schedule_injective_sirius(_, outs, target):
     with target:
         return topi.sirius.schedule_injective(outs)
-        """
 
+"""
 
 if __name__ == "__main__":
     # The code to run when this file is used as a script goes here
