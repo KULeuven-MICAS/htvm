@@ -65,12 +65,17 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     """
 
     # Make sure padding is matched to kernel dimensions so that output tensor has same size
-    test_same_h_padding = padding[0] == padding[2] == kernel.shape[2]//2
-    test_same_w_padding = padding[1] == padding[3] == kernel.shape[3]//2
+    # padding tuple can be specified in multiple ways
+    if len(padding) == 4:
+        test_same_h_padding = padding[0] == padding[2] == kernel.shape[2]//2
+        test_same_w_padding = padding[1] == padding[3] == kernel.shape[3]//2
+    else: #len(padding) == 2:
+        test_same_h_padding = padding[0] == kernel.shape[2]//2
+        test_same_w_padding = padding[1] == kernel.shape[3]//2
 
     if (data.dtype != "int8") and (kernel.dtype != "int8"):
         return fallback_default_conv2d(strategy)
-    if not test_same_w_padding and test_same_h_padding:
+    if not (test_same_w_padding and test_same_h_padding):
         return fallback_default_conv2d(strategy)
     if layout == "NCHW":
         if kernel_layout == "OIHW":
@@ -89,10 +94,12 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
 def fallback_default_conv2d(strategy):
     logger.warning("SIRIUS conv2d: operation not supported: using fallback")
     strategy.add_implementation(
-        wrap_compute_conv2d(topi.nn.conv2d, need_data_layout=True),
-        wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+        #wrap_compute_conv2d(topi.nn.conv2d, need_data_layout=True),
+        #wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
         #wrap_compute_conv2d(topi.x86.conv2d_nchw),
         #wrap_topi_schedule(topi.x86.schedule_conv2d_nchw)
+        wrap_compute_conv2d(topi.arm_cpu.conv2d_nhwc_spatial_pack),
+        wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_nhwc_spatial_pack)
     )
     return strategy
 # conv2d_NCHWc
@@ -118,12 +125,13 @@ def fallback_default_conv2d(strategy):
 #    )
 #    return strategy
 
-
+"""
 @schedule_injective.register(["cpu"], override=True)
 # Will fail for cpu target if override is not set to True (Default=False)
 def schedule_injective_sirius(_, outs, target):
     with target:
         return topi.sirius.schedule_injective(outs)
+        """
 
 
 if __name__ == "__main__":
