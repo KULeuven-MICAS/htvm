@@ -188,6 +188,14 @@ def intrin_conv2d_hwlib(data_shape, filter_shape, stride=1, padding="SAME", dila
                                                                    conv_soma: output_data_buffer})
 
 
+def fallback_schedule_conv2d(outs):
+    """
+    similar to topi.generic.nn.schedule_conv2d_hwcn
+    note: Even though the name suggests otherwise,
+    this function just returns the default generic schedule with autoinline set to false
+    So it works generally on all con2d operations, regardless of mem layout
+    """
+    return topi.generic.schedule_conv2d_hwcn(outs)
 
 def schedule_conv2d_nchw(outs):
     """Schedule for conv2d_nchw, specialized for SIRIUS.

@@ -36,20 +36,33 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     strategy = _op.OpStrategy()
     logger.warning("Using SIRIUS conv2d strategy")
     data, kernel = inputs
-    dilation_h,dilation_w =  attrs.get_int_tuple("dilation")
+
+    dilation_h, dilation_w = attrs.get_int_tuple("dilation")
     stride_h, stride_w = attrs.get_int_tuple("strides")
     padding = attrs.get_int_tuple("padding")
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
 
+    """
+    Test if tensorization is applicable. Otherwise use default strategy
+    
+    Tensorization is applicable for:
+    * dilation = 1
+    * stride = 1
+    * dtype = int8
+    * kernel_layout = OIHW
+    * data_layout = NCHW
+    """
+
     # Make sure padding is matched to kernel dimensions so that output tensor has same size
     test_same_h_padding = padding[0] == padding[2] == kernel.shape[2]//2
     test_same_w_padding = padding[1] == padding[3] == kernel.shape[3]//2
 
+    if (data.dtype != "int8") and (kernel.dtype != "int8"):
+        return fallback_default_conv2d(strategy)
     if not test_same_w_padding and test_same_h_padding:
-        raise NotImplementedError("Padding other than SAME not supported")
-
+        return fallback_default_conv2d(strategy)
     if layout == "NCHW":
         if kernel_layout == "OIHW":
             strategy.add_implementation(
@@ -57,12 +70,19 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
                 wrap_topi_schedule(topi.sirius.schedule_conv2d_nchw)
             )
         else:
-            raise NotImplementedError(f"Data Layout:{layout}: Kernel layout{kernel_layout} not supported")
+            return fallback_default_conv2d(strategy)
     else:
-        raise NotImplementedError(f"Data layout{layout} not supported")
+        return fallback_default_conv2d(strategy)
+    # When tensorization is possible return this strategy
     return strategy
 
-
+def fallback_default_conv2d(strategy):
+    logger.warning("SIRIUS conv2d: operation not supported: using fallback")
+    strategy.add_implementation(
+        wrap_compute_conv2d(topi.nn.conv2d, need_data_layout=True),
+        wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+    )
+    return strategy
 # conv2d_NCHWc
 #@conv2d_NCHWc_strategy.register("cpu")
 #def conv2d_NCHWc_strategy_sirius(attrs, inputs, out_type, target):
