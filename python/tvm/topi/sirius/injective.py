@@ -83,8 +83,23 @@ def schedule_injective(outs):
             # TODO, reshape so this is possible for tensors with too few dimensions?
             logger.warning(f'{x.op.name}: too few tensor dimensions to tensorize: shape = {x.shape}')
             continue
+        # Check if all input tensors for add operation are same size
+        sizes = []
+        for tensor in x.op.input_tensors:
+            sizes.append(len(tensor.shape))
+        all_equal = True
+        for size in sizes:
+            # this loop will stop early if one size is encountered which is not the same
+            if not all_equal:
+                continue
+            else:
+                all_equal = (sizes[0] == size)
+        if not all_equal:
+            logger.warning(f'{x.op.name}: Not all tensor sizes are equal: sizes = {sizes}')
+            continue
         else:
             # Tensorize!
+            logger.warning(f'{x.op.name}: **Tensorizing** element wise sum')
             yo, yi = s[x].split(x.op.axis[-3], factor=ELEMENT_WISE_SIZE)
             stride_innermost = s[x].op.axis[-1].dom.extent
             stride_outermost = s[x].op.axis[-2].dom.extent * s[x].op.axis[-1].dom.extent
