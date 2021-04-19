@@ -34,7 +34,6 @@ from .. import op as _op
 @conv2d_strategy.register(["cpu"])
 def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     strategy = _op.OpStrategy()
-    logger.warning("Using SIRIUS conv2d strategy")
     data, kernel = inputs
 
     dilation_h, dilation_w = attrs.get_int_tuple("dilation")
@@ -43,6 +42,16 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     groups = attrs.groups
     layout = attrs.data_layout
     kernel_layout = attrs.kernel_layout
+    """
+    # These prints are useful for debugging
+    print(f"inputs:{inputs}")
+    print(f"dilations h:{dilation_h} w:{dilation_w}")
+    print(f"strides h:{stride_h} w:{stride_w}")
+    print(f"data layout = {layout}")
+    print(f"kernel layout = {kernel_layout}")
+    print(f"padding = {padding}")
+    print(f"groups = {groups}")
+    """
 
     """
     Test if tensorization is applicable. Otherwise use default strategy
@@ -65,6 +74,7 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
         return fallback_default_conv2d(strategy)
     if layout == "NCHW":
         if kernel_layout == "OIHW":
+            logger.warning("SIRIUS Tensorization approach")
             strategy.add_implementation(
                 wrap_compute_conv2d(topi.nn.conv2d_nchw),
                 wrap_topi_schedule(topi.sirius.schedule_conv2d_nchw)
@@ -81,6 +91,8 @@ def fallback_default_conv2d(strategy):
     strategy.add_implementation(
         wrap_compute_conv2d(topi.nn.conv2d, need_data_layout=True),
         wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+        #wrap_compute_conv2d(topi.x86.conv2d_nchw),
+        #wrap_topi_schedule(topi.x86.schedule_conv2d_nchw)
     )
     return strategy
 # conv2d_NCHWc
