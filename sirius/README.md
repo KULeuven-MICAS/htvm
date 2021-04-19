@@ -97,3 +97,8 @@ Other python dependencies also need to be installed:
 ```bash
 pip3 install -r sirius/requirements.txt
 ```
+### Install `aot_tvm` Ahead-Of-Time compiler
+
+For performing C code generation for sirius, it is also necessary to download the `aot_tvm` python package.
+This package can be downloaded from https://gitlab.com/soma_compiler/aot_tvm_sirius.
+Installation instructions are provided there as well.
