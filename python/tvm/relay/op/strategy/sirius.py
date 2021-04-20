@@ -79,18 +79,20 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
                 test_same_w_padding = padding[1] == kernel.shape[3]//2
             if not (test_same_w_padding and test_same_h_padding):
                 return fallback_default_conv2d(strategy)
-            logger.warning("SIRIUS conv2d Tensorization approach")
+            logger.warning("SIRIUS conv2d Tensorization approach for NCHW")
             strategy.add_implementation(
                 wrap_compute_conv2d(topi.nn.conv2d_nchw),
-                wrap_topi_schedule(topi.sirius.schedule_conv2d_nchw)
+                wrap_topi_schedule(topi.sirius.schedule_conv2d)
             )
     # Ugly workaround for https://discuss.tvm.apache.org/t/incompatible-broadcast-issue-simple-test-case/3856
     elif layout == "NHWC":
         if kernel_layout == "HWOI":
-            logger.warning("SIRIUS conv2d: using HWOI fallback schedule")
+            #logger.warning("SIRIUS conv2d: using HWOI fallback schedule")
+            logger.warning("SIRIUS conv2d Tensorization approach for NHWC")
             strategy.add_implementation(
                 wrap_compute_conv2d(topi.nn.conv2d_nhwc_hwoi),
-                wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+                #wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+                wrap_topi_schedule(topi.sirius.schedule_conv2d),
             )
         else:
             return fallback_default_conv2d(strategy)
