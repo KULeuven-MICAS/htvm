@@ -44,6 +44,7 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     data_dtype = data.dtype
     kernel_dtype = kernel.dtype
     kernel_layout = attrs.kernel_layout
+    """
     # These prints are useful for debugging
     print(f"inputs:{inputs}")
     print(f"dilations h:{dilation_h} w:{dilation_w}")
@@ -52,7 +53,7 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     print(f"kernel layout = {kernel_layout}: type = {kernel_dtype}")
     print(f"padding = {padding}")
     print(f"groups = {groups}")
-
+    """
     """
     Test if tensorization is applicable. Otherwise use default strategy
     
