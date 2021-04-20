@@ -60,8 +60,8 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
     * dilation = 1
     * stride = 1
     * dtype = int8
-    * kernel_layout = OIHW
-    * data_layout = NCHW
+    * kernel_layout = OIHW and data_layout = NCHW
+    * 
     """
 
     if (data.dtype != "int8") and (kernel.dtype != "int8"):
@@ -89,8 +89,8 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
         if kernel_layout == "HWOI":
             logger.warning("SIRIUS conv2d: using HWOI fallback schedule")
             strategy.add_implementation(
-                wrap_compute_conv2d(topi.arm_cpu.conv2d_direct_simd),
-                wrap_topi_schedule(topi.arm_cpu.schedule_conv2d_direct_simd)
+                wrap_compute_conv2d(topi.nn.conv2d_nhwc_hwoi),
+                wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
             )
         else:
             return fallback_default_conv2d(strategy)
