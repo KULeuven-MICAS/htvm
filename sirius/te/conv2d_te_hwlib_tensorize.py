@@ -216,7 +216,7 @@ schedule = te.create_schedule(conv2d.op)
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 
 # Get padded tensor and tensorize padding
-schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0], intrin_pad_NHWC(data_orig.shape, kernel_orig.shape, data_layout="NCHW"))
+schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0], intrin_pad(data_orig.shape, kernel_orig.shape, data_layout="NCHW"))
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 # Now also tensorize the  conv2d operation without the padding
 schedule[conv2d].tensorize(schedule[conv2d].op.axis[1], intrin_conv2d_hwlib(data_orig.shape, kernel_orig.shape, out_dtype="int8"))
@@ -233,7 +233,7 @@ schedule = te.create_schedule(conv2d.op)
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 
 # Get padded tensor and tensorize padding
-schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0], intrin_pad_NHWC(data_orig.shape, kernel_orig.shape, data_layout="NHWC"))
+schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0], intrin_pad(data_orig.shape, kernel_orig.shape, data_layout="NHWC"))
 print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
 # Now also tensorize the  conv2d operation without the padding
 schedule[conv2d].tensorize(schedule[conv2d].op.axis[1], intrin_conv2d_hwlib(data_orig.shape, kernel_orig.shape, data_layout="NHWC"))
