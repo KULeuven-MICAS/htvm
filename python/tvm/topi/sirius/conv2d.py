@@ -236,7 +236,7 @@ def schedule_conv2d(outs):
     # We start from TVM's default schedule
     s = te.create_schedule([x.op for x in outs])
     # Debug message
-    print("Using SIRIUS schedule")
+    print("SIRIUS conv2d: scheduling")
 
     def _callback(op):
         if ("conv2d_nchw" in op.tag) or ("conv2d_nhwc" in op.tag):
