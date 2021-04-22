@@ -136,14 +136,12 @@ def fallback_default_conv2d(strategy):
 #    )
 #    return strategy
 
-"""
 @schedule_injective.register(["cpu"], override=True)
 # Will fail for cpu target if override is not set to True (Default=False)
 def schedule_injective_sirius(_, outs, target):
     with target:
         return topi.sirius.schedule_injective(outs)
 
-"""
 
 if __name__ == "__main__":
     # The code to run when this file is used as a script goes here
