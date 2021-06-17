@@ -10,16 +10,16 @@ import tvm
 from tvm import te
 from tvm import topi
 
-def intrin_ews_soma(width, data_type, stride_outermost, stride_innermost):
+def intrin_ews_soma(fixed_dim, data_type, stride_outermost, stride_innermost):
     # Make height and channels variable
-    height = te.var(name="height")
-    channels = te.var(name="channels")
-    tensor_size = (width, height, channels)
+    var_dim_1 = te.var(name="var_dim_2")
+    var_dim_2 = te.var(name="var_dim_1")
+    tensor_shape = (fixed_dim, var_dim_1, var_dim_2)
 
-    a = te.placeholder(tensor_size, dtype=data_type, name="a")
-    b = te.placeholder(tensor_size, dtype=data_type, name="b")
+    a = te.placeholder(tensor_shape, dtype=data_type, name="a")
+    b = te.placeholder(tensor_shape, dtype=data_type, name="b")
 
-    c = te.compute(tensor_size, lambda i, j, k: a[i, j, k] + b[i, j, k], name="c")
+    c = te.compute(tensor_shape, lambda i, j, k: a[i, j, k] + b[i, j, k], name="c")
 
     # Preview a generic schedule
     print("Generic Schedule for Element-wise Sum Compute to be tensorized:")
@@ -58,21 +58,19 @@ def intrin_ews_soma(width, data_type, stride_outermost, stride_innermost):
 
 
 # Dimensions of tensorization intrinsic
-width = 2
+width = 8
 data_type = "int8"
 
 # Dimensions of tensor to be tensorized
 ro = 26
-co = 20
-dim1 = 14
-dim2 = 16
+dim1 = 32
+dim2 = 20
+dim3 = 8
 
 # Create a tensorizable schedule
-A = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="A")
-B = te.placeholder((ro,co,dim1,dim2), dtype=data_type, name="B")
-# C = te.compute((ro,co,dim1,dim2), lambda i,j,k,l: A[i,j,k,l] + B[i,j,k,l], name="T_add")
-# Using topi.add implementation here to reflect schedule of relay graph instead of custom operation
-C = topi.add(A, B)
+A = te.placeholder((32,20,8), dtype=data_type, name="A")
+#B = te.placeholder((32,8,dim3), dtype=data_type, name="B")
+C = topi.reshape(A, (8,4,20,8))
 
 # Create a vanilla schedule
 s = te.create_schedule(C.op)
@@ -81,7 +79,7 @@ print("=========================================================================
 print(tvm.lower(s, [A, B, C], simple_mode=True))
 
 # indexing axes negatively to split over third innermost axis
-yo, yi = s[C].split(C.op.axis[-3], factor=2)
+yo, yi = s[C].split(C.op.axis[-3], factor=width)
 print("Larger schedule to apply tensorization of the Generic Schedule (after split):")
 print("==============================================================================")
 print(tvm.lower(s, [A, B, C], simple_mode=True))
