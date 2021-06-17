@@ -12,7 +12,7 @@ import numpy as np
 # tensor_shape = (1,1,8,8)
 
 # Or create a 2D-matrix
-tensor_shape = (32,20,8)
+tensor_shape = (20,20,8)
 data_type = "int8"
 
 # Construct the variables --> tvm.relay.Var type
@@ -26,6 +26,9 @@ sum_expr = relay.add(a,b)
 module = tvm.ir.IRModule()
 module = module.from_expr(sum_expr)
 
+print(module
+      )
+
 # Define a target for compilation and a runtime context for the embedded device
 
 # c             --> emit C code
@@ -38,10 +41,10 @@ module = module.from_expr(sum_expr)
 # Optimize (?)  and build the relay code:
 with tvm.transform.PassContext(opt_level=3, config={'tir.disable_vectorize':True}):
     #graph_json, compiled_model, simplified_params = relay.build(module, target=target)
-    lib = relay.build(module, target="sirius")
+    lib = relay.build(module, target="c")
 
 # All necessary c-files are copied to the workspace but some headers might be missing.
 # This results in runtime errors (failing compilation) and will halt your script.
 
 file_name = "ews.so"
-lib.export_library(file_name,workspace_dir="/tmp/")
+lib.export_library(file_name,workspace_dir="/tmp/tvm_workspace")
