@@ -256,6 +256,7 @@ def schedule_conv2d(outs):
     # Traverse the given operation's stages, and tensorize where needed!
     traverse_inline(s, outs[0].op, _callback)
     # Returning the built schedule
+    te.schedule.AutoInlineInjective(s)
     return s
 
 #def schedule_conv2d_nchw(outs):
