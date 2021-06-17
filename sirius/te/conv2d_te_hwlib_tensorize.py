@@ -8,18 +8,7 @@ from tvm import topi
 from tvm.topi.nn.utils import get_pad_tuple
 from tvm.topi.nn.pad import pad
 
-# Tensor Dimensions
 
-B = 2       # Input batch (also called N sometimes)
-C = 3       # Input channels
-X = 256     # Input width (also called W sometimes)
-Y = 256     # Input height (also called H sometimes)
-
-FX = 5      # Filter width
-FY = 5      # Filter height
-K = 32      # Filter output channels
-
-data_type = "int8"
 
 def intrin_pad(data_shape, filter_shape, padding="SAME", dilation=1, out_dtype="int8", data_layout="NCHW"):
 
@@ -204,26 +193,36 @@ def intrin_conv2d_hwlib(data_shape, filter_shape, stride=1, padding="SAME", dila
                                                                    filter_data: filter_data_buffer,
                                                                    conv_soma: output_data_buffer})
 
+# Tensor Dimensions
+n = 2       # Input batch
+c = 3       # Input channels
+h = 256     # Input height
+w = 256     # Input width
+o = 32      # Filter output channels
+i = c       # Filter input channels
+fh = 5      # Filter height
+fw = 5      # Filter width
+data_type = "int8"
 
-data_orig = te.placeholder((B, C, Y, X),dtype=data_type, name="data_orig")
-kernel_orig = te.placeholder((K, C, FY, FX), dtype=data_type, name="kernel_orig")
-conv2d = topi.nn.conv2d(data_orig, kernel_orig, 1, "SAME", 1)
+data = te.placeholder((n, c, h, w),dtype=data_type, name="data")
+kernel = te.placeholder((o, i, fh, fw), dtype=data_type, name="kernel")
+conv2d = topi.nn.conv2d(data, kernel, 1, "SAME", 1)
 
 
 print("Generic Schedule for CONV2D (NCHW) Compute to be tensorized:")
 print("===============================================================")
 schedule = te.create_schedule(conv2d.op)
-print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
+print(tvm.lower(schedule, [data, kernel], simple_mode=True))
 
 # Get padded tensor and tensorize padding
-schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0], intrin_pad(data_orig.shape, kernel_orig.shape, data_layout="NCHW"))
-print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
+schedule.stages[1].tensorize(schedule[conv2d].op.input_tensors[0].op.axis[0], intrin_pad(data.shape, kernel.shape, data_layout="NCHW"))
+print(tvm.lower(schedule, [data, kernel], simple_mode=True))
 # Now also tensorize the  conv2d operation without the padding
-schedule[conv2d].tensorize(schedule[conv2d].op.axis[1], intrin_conv2d_hwlib(data_orig.shape, kernel_orig.shape, out_dtype="int8"))
-print(tvm.lower(schedule, [data_orig, kernel_orig], simple_mode=True))
+schedule[conv2d].tensorize(schedule[conv2d].op.axis[1], intrin_conv2d_hwlib(data.shape, kernel.shape, out_dtype="int8"))
+print(tvm.lower(schedule, [data, kernel], simple_mode=True))
 
-data_orig = te.placeholder((B, Y, X, C,), dtype=data_type, name="data_orig")
-kernel_orig = te.placeholder((FY, FX, K, C,), dtype=data_type, name="kernel_orig")
+data_orig = te.placeholder((n, h, w, c,), dtype=data_type, name="data_orig")
+kernel_orig = te.placeholder((fh, fw, o, i,), dtype=data_type, name="kernel_orig")
 conv2d = topi.nn.conv2d_nhwc_hwoi(data_orig, kernel_orig, 1, "SAME", 1, "int32")
 
 
