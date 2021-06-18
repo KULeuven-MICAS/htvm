@@ -92,8 +92,8 @@ def conv2d_strategy_sirius(attrs, inputs, out_type, target):
             logger.warning("SIRIUS conv2d Tensorization approach for NHWC")
             strategy.add_implementation(
                 wrap_compute_conv2d(topi.nn.conv2d_nhwc_hwoi),
-                #wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
-                wrap_topi_schedule(topi.sirius.schedule_conv2d),
+                wrap_topi_schedule(topi.sirius.fallback_schedule_conv2d)
+                #wrap_topi_schedule(topi.sirius.schedule_conv2d),
             )
         else:
             return fallback_default_conv2d(strategy)
