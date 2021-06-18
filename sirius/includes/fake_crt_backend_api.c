@@ -18,7 +18,7 @@ void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t nbytes, 
   // Just like malloc this function returns the pointer to the allocated memory space.
   // If a NULL pointer is returned the allocation did not happen properly
   // We disregard the use of device_type, device_id, dtype_code_hint, and dtype_bits_hint fields
-  void *ptr = malloc(nbytes * sizeof(int8));
+  void *ptr = malloc(nbytes * sizeof(char));
   // malloc will return a null pointer if allocation fails, just like TVMBackendAllocWorkspace
   return ptr;
 }
