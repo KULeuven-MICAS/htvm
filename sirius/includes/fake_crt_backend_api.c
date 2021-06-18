@@ -1,5 +1,6 @@
 /* Alternative to tvm's crt_backend_api.c */
 #include <stdlib.h>
+#include <stdint.h>
 
 void* TVMBackendAllocWorkspace(int device_type, int device_id, uint64_t nbytes, int dtype_code_hint,
                                int dtype_bits_hint) {
