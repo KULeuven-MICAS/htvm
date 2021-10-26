@@ -85,6 +85,7 @@ tvm_option(USE_BYODT_POSIT "Build with BYODT software emulated posit custom data
 tvm_option(USE_BLAS "The blas library to be linked" none)
 tvm_option(USE_MKL "MKL root path when use MKL blas" OFF)
 tvm_option(USE_DNNL "Enable DNNL codegen" OFF)
+tvm_option(USE_SOMA_CODEGEN "Enable codegen for the SOMA accelerator" C_SRC)
 tvm_option(USE_CUDNN "Build with cuDNN" OFF)
 tvm_option(USE_CUBLAS "Build with cuBLAS" OFF)
 tvm_option(USE_CUTLASS "Build with CUTLASS" OFF)
@@ -496,7 +497,11 @@ include(cmake/modules/contrib/ArmComputeLib.cmake)
 include(cmake/modules/contrib/TensorRT.cmake)
 include(cmake/modules/contrib/VitisAI.cmake)
 include(cmake/modules/contrib/Verilator.cmake)
+<<<<<<< HEAD
 include(cmake/modules/contrib/CLML.cmake)
+=======
+include(cmake/modules/contrib/SOMA.cmake)
+>>>>>>> [WIP] Some progress towards BYOC for SOMA, not sure if the right codegen is being used when running... Based this on a lot of DNNL codegen code.
 include(cmake/modules/Git.cmake)
 include(cmake/modules/LibInfo.cmake)
 include(cmake/modules/RustExt.cmake)
