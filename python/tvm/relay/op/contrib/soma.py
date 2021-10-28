@@ -35,14 +35,14 @@ def _register_external_op_helper(op_name, supported=True):
     return _func_wrapper
 
 
-@tvm.ir.register_op_attr("qnn.add", "target.soma")
+@tvm.ir.register_op_attr("add", "target.soma")
 def qnn_add(expr):
     """
-    Support only uint8 element wise sum.
+    Support only int8 element wise sum.
 
     Parameters
     ----------
-    expr : TODO: What type is Epr?
+    expr : TODO: What type is Exp?
         Contains attribute and argument information.
 
     Returns
@@ -51,7 +51,7 @@ def qnn_add(expr):
     """
     args = expr.args
     for typ in [args[0].checked_type, args[1].checked_type]:
-        if typ.dtype != "uint8":
+        if typ.dtype != "int8":
             return False
 
     return True
