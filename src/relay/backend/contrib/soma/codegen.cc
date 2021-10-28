@@ -174,6 +174,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
 
     std::vector<Output> VisitExpr_(const CallNode* call) final {
       GenerateBodyOutput ret;
+      LOG(WARNING) << "Visiting call node with: " << AsText(call->op, false);
       if (const auto* func = call->op.as<FunctionNode>()) {
         ret = GenerateCompositeFunctionCall(func, call);
       } else {
@@ -206,6 +207,25 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
         return arg_names;
       }
 
+    /*!
+    * \brief Returns dtype string, extended drom CodeGenCBase to also support int8
+    *
+    * \param ttype TensorTypeNode* to get the dtype of
+    *
+    * \return The dtype string.
+     */
+    std::string GetDtypeString(const TensorTypeNode* ttype) {
+      std::string dtype;
+      LOG(WARNING) << "GetDtypeString dtype";
+      if (runtime::TypeMatch(ttype->dtype, kDLInt, 8)) {
+        LOG(WARNING) << "GetDtypeString dtype = int8";
+        dtype = "int8_t";
+      } else {
+        dtype = CodegenCBase::GetDtypeString(ttype);
+      }
+      return dtype;
+    }
+
     GenerateBodyOutput GenerateOpCall(const CallNode* call) {
       const auto* op_node = call->op.as<OpNode>();
       CHECK(op_node) << "Expect OpNode, but got " << call->op->GetTypeKey();
@@ -215,7 +235,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
           {"qnn.dense", {"soma_dense8", Dense}},
           {"qnn.relu", {"soma_relu8", Relu}},
           {"qnn.batch_norm", {"soma_bn8", BatchNorm}},
-          {"qnn.add", {"soma_add8", Add}},
+          {"add", {"soma_add8", Add}},
       };
 
        const auto op_name = GetRef<Op>(op_node)->name;
