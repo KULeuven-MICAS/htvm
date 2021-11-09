@@ -395,13 +395,14 @@ class SOMAModuleCodegen : public CSourceModuleCodegenBase {
       // when export_library is invoked.
       String sym = std::get<0>(res);
       Array<String> variables = std::get<1>(res);
+      Array<String> syms = {sym};
 
       // Create a CSource module with all above artifacts.
       const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
       CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
 
       std::cout << "HEllo1" << std::endl;
-      auto ret = (*pf)(code, "c", sym, variables);
+      auto ret = (*pf)(code, "c", syms, variables);
       std::cout << "Hello2" << std::endl;
       return ret;
     }

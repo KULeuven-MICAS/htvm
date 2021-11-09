@@ -38,8 +38,6 @@ module = relay.transform.PartitionGraph()(module)
 # Define a target for compilation
 target = tvm.target.Target("sirius")
 
-import pdb; pdb.set_trace()
-
 # Optimize (?)  and build the relay code:
 with tvm.transform.PassContext(opt_level=3):
     lib = relay.build(module, target)
@@ -48,7 +46,7 @@ with tvm.transform.PassContext(opt_level=3):
 build_directory = "/tmp/"
 
 library = lib.get_lib()
-json = lib.get_json()
+json = lib.get_graph_json()
 new_params = lib.get_params()
 
 
