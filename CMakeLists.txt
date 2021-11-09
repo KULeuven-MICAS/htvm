@@ -54,7 +54,7 @@ tvm_option(USE_GRAPH_EXECUTOR_CUDA_GRAPH "Build with tiny graph executor with CU
 tvm_option(USE_AOT_EXECUTOR "Build with AOT executor" ON)
 tvm_option(USE_PROFILER "Build profiler for the VM and graph executor" ON)
 tvm_option(USE_OPENMP "Build with OpenMP thread pool implementation" OFF)
-tvm_option(USE_RELAY_DEBUG "Building Relay in debug mode..." OFF)
+tvm_option(USE_RELAY_DEBUG "Building Relay in debug mode..." ON)
 tvm_option(USE_RTTI "Build with RTTI" ON)
 tvm_option(USE_MSVC_MT "Build with MT" OFF)
 tvm_option(USE_MICRO "Build with Micro TVM support" OFF)

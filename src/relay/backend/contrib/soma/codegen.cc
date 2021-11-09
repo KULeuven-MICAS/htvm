@@ -388,7 +388,7 @@ class SOMAModuleCodegen : public CSourceModuleCodegenBase {
       auto res = GenSOMAFunc(Downcast<Function>(ref));
 
       // "code" is the generated C code with SOMA APIs.
-      std::string code = "Hello!\n"; // code_stream_.str();
+      std::string code = code_stream_.str();
 
       // "res" is a tuple of constant weights (symbols, values).
       // All constant tensors will be serialzied along with the generated C code
@@ -399,7 +399,11 @@ class SOMAModuleCodegen : public CSourceModuleCodegenBase {
       // Create a CSource module with all above artifacts.
       const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
       CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
-      return (*pf)(code, "c", sym, variables);
+
+      std::cout << "HEllo1" << std::endl;
+      auto ret = (*pf)(code, "c", sym, variables);
+      std::cout << "Hello2" << std::endl;
+      return ret;
     }
 
   private:
