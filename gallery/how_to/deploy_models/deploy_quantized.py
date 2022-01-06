@@ -41,10 +41,11 @@ from tvm.contrib.download import download_testdata
 from mxnet import gluon
 import logging
 import os
+from aot_tvm import tvm_compile
 
 batch_size = 1
 model_name = "resnet18_v1"
-target = "cuda"
+target = "c"
 dev = tvm.device(target)
 
 ###############################################################################
@@ -134,7 +135,7 @@ def get_model():
 # input argument. Scales are calculated by minimizing the KL divergence between
 # distribution of activation before and after quantization.
 # Alternatively, we can also use pre-defined global scales. This saves the time
-# for calibration. But the accuracy might be impacted.
+# for calibration. But the accuracy might be impacted
 
 
 def quantize(mod, params, data_aware):
@@ -164,7 +165,25 @@ def run_inference(mod):
 def main():
     mod, params = get_model()
     mod = quantize(mod, params, data_aware=True)
-    run_inference(mod)
+    #run_inference(mod)
+    # Optimize (?)  and build the relay code:
+    with tvm.transform.PassContext(opt_level=3):
+        lib = relay.build(mod, target)
+    library = lib.get_lib()
+    json = lib.get_graph_json()
+    new_params = lib.get_params()
+    build_directory = '/tmp/'
+
+    tvm_compile(
+        json,
+        new_params,
+        os.path.join(build_directory, "soma_main.c"),
+        os.path.join(build_directory, "soma.h"),
+        verbose=True,
+        get_per_node=False,
+        add_perf_counter=True,
+        perf_type="c",
+    )
 
 
 if __name__ == "__main__":
