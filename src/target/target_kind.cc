@@ -412,6 +412,15 @@ TVM_REGISTER_TARGET_KIND("sirius", kDLCPU)
     .add_attr_option<String>("march")
     .set_default_keys({"cpu"});
 
+// Registering a target kind for sirius, based on c host.
+TVM_REGISTER_TARGET_KIND("sirius", kDLCPU)
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<Bool>("link-params", Bool(false))
+    .add_attr_option<String>("runtime")
+    .add_attr_option<String>("mcpu")
+    .add_attr_option<String>("march")
+    .set_default_keys({"cpu"});
+
 /**********  Registry  **********/
 
 TVM_REGISTER_GLOBAL("target.TargetKindGetAttr")
