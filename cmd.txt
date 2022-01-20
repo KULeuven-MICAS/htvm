@@ -1,0 +1,8 @@
+python -m tvm.driver.tvmc compile --target="c" \                                                                                                 (byoc|✚2…)
+             --runtime=crt \
+             --executor=aot \
+             --executor-aot-interface-api=c \
+             --executor-aot-unpacked-api=1 \
+             --pass-config tir.disable_vectorize=1 \
+             ~/Downloads/ratslam_posterior.onnx -f mlf
+
