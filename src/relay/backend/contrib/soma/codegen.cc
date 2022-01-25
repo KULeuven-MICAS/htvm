@@ -1,5 +1,7 @@
 //
 // Created by wvr on 26.10.21.
+// Based on: https://github.com/apache/tvm/blob/8a0249cd4d12a2eb1a4e7a692a9265bc63fec5c8/src/relay/backend/contrib/dnnl/codegen.cc  */
+//
 //
 
 #include <tvm/relay/attrs/nn.h>
@@ -28,6 +30,8 @@ inline size_t GetShape1DSize(const Type& type) {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
 }
 
+/*! Extract arguments from the call node, and constuct the args vector. (Next functions.) */
+
 std::vector<std::string> Conv2d(const CallNode* call) {
   std::vector<std::string> args;
   const auto* conv2d_attr = call->attrs.as<Conv2DAttrs>();
@@ -41,9 +45,10 @@ std::vector<std::string> Conv2d(const CallNode* call) {
     args.push_back(std::to_string(s));
   }
 
-  // Args: O, G, Ph, Pw, Kh, Kw, Sh, Sw
+  // Args: Outputs, Groups, vertical padding, horizontal padding,
+  // width, height, vertical stride, horizontal strid
   args.push_back(std::to_string(wshape[0]));
-  args.push_back(std::to_string(conv2d_attr->groups));
+  args.push_back(std::to_string(conv2d_attr->groups)); // Used to parallelise the workload or to split operations.
   args.push_back(std::to_string(conv2d_attr->padding[0].as<IntImmNode>()->value));
   args.push_back(std::to_string(conv2d_attr->padding[1].as<IntImmNode>()->value));
   args.push_back(std::to_string(wshape[2]));
@@ -59,7 +64,7 @@ std::vector<std::string> Dense(const CallNode* call) {
   auto ishape = GetShape(call->args[0]->checked_type());
   auto wshape = GetShape(call->args[1]->checked_type());
 
-  // Args: N, C, O
+  // Args: Input shape dimensions (N, C), weight/output shape O
   args.push_back(std::to_string(ishape[0]));
   args.push_back(std::to_string(ishape[1]));
   args.push_back(std::to_string(wshape[0]));
@@ -71,7 +76,7 @@ std::vector<std::string> Relu(const CallNode* call) {
   std::vector<std::string> args;
   auto ishape = GetShape(call->args[0]->checked_type());
 
-  // Args: N, C, H, W
+  // Args: N, C, H, W (all tensor dimensions)
   for (auto s : ishape) {
     args.push_back(std::to_string(s));
   }
@@ -84,7 +89,7 @@ std::vector<std::string> BatchNorm(const CallNode* call) {
   const auto* bn_attr = call->attrs.as<BatchNormAttrs>();
   auto ishape = GetShape(call->args[0]->checked_type());
 
-  // Args: N, C, H, W
+  // Args: N, C, H, W (all tensor dimensions)
   for (auto s : ishape) {
     args.push_back(std::to_string(s));
   }
@@ -99,7 +104,7 @@ std::vector<std::string> Add(const CallNode* call) {
   std::vector<std::string> args;
   auto ishape = GetShape(call->args[0]->checked_type());
 
-  // Args: H, W
+  // Args: H, W (input size = output size)
   for (auto s : ishape) {
     args.push_back(std::to_string(s));
   }

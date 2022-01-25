@@ -50,7 +50,6 @@ def add(expr):
         Supported or not?
     """
     args = expr.args
-    import pdb; pdb.set_trace()
     for typ in [args[0].checked_type, args[1].checked_type]:
         if typ.dtype != "int8":
             return False
