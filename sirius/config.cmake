@@ -243,7 +243,7 @@ set(USE_VERILATOR OFF)
 set(USE_ANTLR OFF)
 
 # Whether use Relay debug mode
-set(USE_RELAY_DEBUG OFF)
+set(USE_RELAY_DEBUG ON)
 
 # Whether to build fast VTA simulator driver
 set(USE_VTA_FSIM OFF)
@@ -269,3 +269,5 @@ set(USE_HEXAGON_SDK /path/to/sdk)
 
 # Whether to use ONNX codegen
 set(USE_TARGET_ONNX OFF)
+
+set(USE_SOMA_CODEGEN ON)
