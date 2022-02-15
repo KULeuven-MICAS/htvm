@@ -436,6 +436,7 @@ runtime::Module SOMACompiler(const ObjectRef& ref) {
 
 TVM_REGISTER_GLOBAL("relay.ext.soma").set_body_typed(SOMACompiler);
 
+
 }
 }
 }

@@ -32,6 +32,7 @@ module = module.from_expr(sum_expr)
 
 #module = relay.transform.MergeComposite(soma.pattern_table)(module)
 module = relay.transform.AnnotateTarget(["soma"])(module)
+#module = relay.transform.AnnotateTarget(["c"])(module)
 module = relay.transform.MergeCompilerRegions()(module)
 module = relay.transform.PartitionGraph()(module)
 
