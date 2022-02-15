@@ -270,4 +270,4 @@ set(USE_HEXAGON_SDK /path/to/sdk)
 # Whether to use ONNX codegen
 set(USE_TARGET_ONNX OFF)
 
-set(USE_SOMA_CODEGEN ON)
+set(USE_SOMA_CODEGEN C_SRC)

@@ -34,10 +34,9 @@ elseif(USE_SOMA_CODEGEN STREQUAL "C_SRC")
 
   # TODO: We can package the soma library together with this SOMA TVM branch.
   # find_library(EXTERN_LIBRARY_SOMA soma)
-  #list(APPEND TVM_RUNTIME_LINKER_LIBS ${EXTERN_LIBRARY_SOMA})
+  list(APPEND TVM_RUNTIME_LINKER_LIBS ${EXTERN_LIBRARY_SOMA})
   file(GLOB SOMA_CONTRIB_SRC src/runtime/contrib/soma/soma.cc)
 
-  #list(APPEND RUNTIME_SRCS ${SOMA_CONTRIB_SRC})
-  #message(STATUS "Build with SOMA C source module: " ${EXTERN_LIBRARY_SOMA})
+  message(STATUS "Build with SOMA C source module: " ${EXTERN_LIBRARY_SOMA})
 endif()
 
