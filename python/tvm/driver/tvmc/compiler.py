@@ -277,6 +277,7 @@ def compile_model(
     if desired_layout:
         mod = convert_graph_layout(mod, desired_layout)
 
+
     tvm_target, extra_targets = target_from_cli(target, additional_target_options)
     tvm_target, target_host = Target.canon_target_and_host(tvm_target, target_host)
 

@@ -50,8 +50,9 @@ def add(expr):
         Supported or not?
     """
     args = expr.args
+    return True
     for typ in [args[0].checked_type, args[1].checked_type]:
-        if typ.dtype != "int8":
+        if typ.dtype != "int8" and typ.dtype != 'int64':
             return False
 
     return True
@@ -95,3 +96,23 @@ def pattern_table():
     conv2d_relu_pat = ("soma.conv2d_relu8", make_pattern(with_bias=False))
     soma_patterns = [conv2d_bias_relu_pat, conv2d_relu_pat]
     return soma_patterns
+
+
+def partition_for_soma(mod, params=None, dpu=None, **opts):
+    # Convert the layout of the graph where possible.
+    seq = tvm.transform.Sequential(
+        [
+            transform.AnnotateTarget(["soma"]),
+            transform.MergeCompilerRegions(),
+            transform.PartitionGraph(),
+
+        ]
+    )
+
+    with tvm.transform.PassContext(opt_level=3):
+        try:
+            return seq(mod)
+        except Exception as err:
+            raise TVMCException(
+                "Error converting layout to {0}".format(str(err))
+            )

@@ -48,8 +48,14 @@ def convert_graph_layout(mod, desired_layout):
     # Convert the layout of the graph where possible.
     seq = transform.Sequential(
         [
+
             relay.transform.RemoveUnusedFunctions(),
             relay.transform.ConvertLayout(desired_layouts),
+
+            relay.transform.AnnotateTarget(["soma"]),
+            relay.transform.MergeCompilerRegions(),
+            relay.transform.PartitionGraph(),
+
         ]
     )
 

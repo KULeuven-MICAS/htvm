@@ -29,6 +29,7 @@ from tvm.relay.op.contrib.cmsisnn import partition_for_cmsisnn
 from tvm.relay.op.contrib.ethosu import partition_for_ethosu
 from tvm.relay.op.contrib.bnns import partition_for_bnns
 from tvm.relay.op.contrib.vitis_ai import partition_for_vitis_ai
+from tvm.relay.op.contrib.soma import partition_for_soma
 
 
 from tvm.driver.tvmc import TVMCException
@@ -76,6 +77,10 @@ REGISTERED_CODEGEN = {
     "ethos-n78": {
         "config_key": "relay.ext.ethos-n.options",
         "pass_pipeline": partition_for_ethosn,
+    },
+    "soma": {
+        "config_key": None,
+        "pass_pipeline": partition_for_soma,
     },
 }
 
