@@ -37,7 +37,7 @@ module = relay.transform.MergeCompilerRegions()(module)
 module = relay.transform.PartitionGraph()(module)
 
 # Define a target for compilation
-target = tvm.target.Target("sirius")
+target = tvm.target.Target("c")
 
 # Optimize (?)  and build the relay code:
 with tvm.transform.PassContext(opt_level=3):
