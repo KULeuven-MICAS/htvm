@@ -103,14 +103,17 @@ For performing C code generation for sirius, it is also necessary to download th
 This package can be downloaded from https://gitlab.com/soma_compiler/aot_tvm_sirius.
 Installation instructions are provided there as well.
 
-## Running usiong TVMC
+## Running using TVMC
 You can run the compiler from the command line using:
 ```
-python -m tvm.driver.tvmc compile --target="c" \                                                                                                 (b
-             --runtime=crt \
-             --executor=aot \
-             --executor-aot-interface-api=c \
-             --executor-aot-unpacked-api=1 \
-             --pass-config tir.disable_vectorize=1 \
-             ~/Downloads/ratslam_posterior.onnx -f mlf
+python -m tvm.driver.tvmc compile --target="soma, c" \
+            --runtime=crt \
+            --executor=aot \
+            --executor-aot-interface-api=c \
+            --executor-aot-unpacked-api=1 \
+            --pass-config tir.disable_vectorize=1 \
+            sirius/byoc/ews_net.onnx -f mlf
 ```
+
+This will generate a `module.tar` file which contains the c source code.
+
