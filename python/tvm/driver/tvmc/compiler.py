@@ -307,6 +307,7 @@ def compile_model(
             graph_module = relay.build(
                 mod, target=tvm_target, executor=executor, runtime=runtime, params=params
             )
+    print(mod)
 
     # Generate output dump files with sources
     if dump_code is None:

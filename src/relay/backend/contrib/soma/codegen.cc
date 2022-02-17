@@ -236,11 +236,16 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       CHECK(op_node) << "Expect OpNode, but got " << call->op->GetTypeKey();
       using ArgFunType = std::function<std::vector<std::string>(const CallNode*)>;
       static const std::map<std::string, std::pair<std::string, ArgFunType>> op_map = {
+          {"nn.conv2d", {"soma_conv2d8", Conv2d}},
+          {"nn.dense", {"soma_dense8", Dense}},
+          {"nn.relu", {"soma_relu8", Relu}},
+          {"nn.batch_norm", {"soma_bn8", BatchNorm}},
           {"qnn.conv2d", {"soma_conv2d8", Conv2d}},
           {"qnn.dense", {"soma_dense8", Dense}},
           {"qnn.relu", {"soma_relu8", Relu}},
           {"qnn.batch_norm", {"soma_bn8", BatchNorm}},
           {"add", {"soma_add8", Add}},
+          {"nn.bias_add", {"soma_add8", Add}},
       };
 
        const auto op_name = GetRef<Op>(op_node)->name;

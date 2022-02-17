@@ -9,6 +9,7 @@ from tvm.relay.expr import const
 from tvm.relay import transform
 from tvm.relay.build_module import bind_params_by_name
 from tvm.relay.testing.temp_op_attr import TempOpAttr
+from tvm.driver.tvmc import TVMCException
 
 from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 from .register import register_pattern_table
@@ -30,33 +31,16 @@ def _register_external_op_helper(op_name, supported=True):
         The wrapped function to enable support for the operator.
     """
     @tvm.ir.register_op_attr(op_name, "target.soma")
-    def _func_wrapper(attrs, args):
+    def _func_wrapper(attrs):#, args):
         return supported
     return _func_wrapper
 
-
-@tvm.ir.register_op_attr("add", "target.soma")
-def add(expr):
-    """
-    Support only int8 element wise sum.
-
-    Parameters
-    ----------
-    expr : TODO: What type is Expr?
-        Contains attribute and argument information.
-
-    Returns
-    -------
-        Supported or not?
-    """
-    args = expr.args
-    return True
-    for typ in [args[0].checked_type, args[1].checked_type]:
-        if typ.dtype != "int8" and typ.dtype != 'int64':
-            return False
-
-    return True
-
+_register_external_op_helper("add")
+_register_external_op_helper("nn.bias_add")
+_register_external_op_helper("nn.conv2d")
+_register_external_op_helper("qnn.conv2d")
+_register_external_op_helper("nn.relu")
+_register_external_op_helper("qnn.relu")
 
 def make_pattern(with_bias=True):
     """
@@ -64,7 +48,7 @@ def make_pattern(with_bias=True):
     (Taken from DNNL example.)
     Parameters
     ----------
-    with_bias : Whether or not to include bios
+    with_bias : Whether or not to include bias
 
     Returns
     -------
@@ -73,12 +57,12 @@ def make_pattern(with_bias=True):
     data = wildcard()
     weight = wildcard()
     bias = wildcard()
-    conv = is_op("qnn.conv2d")(data, weight)
+    conv = is_op("nn.conv2d")(data, weight)
     if with_bias:
-        conv_out = is_op("qnn.add")(conv, bias)
+        conv_out = is_op("add")(conv, bias)
     else:
         conv_out = conv
-    return is_op("qnn.relu")(conv_out)
+    return is_op("nn.relu")(conv_out)
 
 
 @register_pattern_table("soma")
@@ -90,8 +74,6 @@ def pattern_table():
         The patterns.
     """
     # TODO: Register other operations
-    return []
-
     conv2d_bias_relu_pat = ("soma.conv2d_bias_relu8", make_pattern(with_bias=True))
     conv2d_relu_pat = ("soma.conv2d_relu8", make_pattern(with_bias=False))
     soma_patterns = [conv2d_bias_relu_pat, conv2d_relu_pat]
@@ -110,6 +92,7 @@ def partition_for_soma(mod, params=None, dpu=None, **opts):
     The partitioned module.
 
     """
+    import pdb; pdb.set_trace()
     # Convert the layout of the graph where possible.
     seq = tvm.transform.Sequential(
         [
