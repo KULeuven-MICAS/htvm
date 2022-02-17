@@ -64,11 +64,11 @@ def make_pattern(with_bias=True):
     (Taken from DNNL example.)
     Parameters
     ----------
-    with_bias : Wheter or not to include bios
+    with_bias : Whether or not to include bios
 
     Returns
     -------
-        The created pattern from the patern matching engine.
+        The created pattern from the pattern matching engine.
     """
     data = wildcard()
     weight = wildcard()
@@ -99,6 +99,17 @@ def pattern_table():
 
 
 def partition_for_soma(mod, params=None, dpu=None, **opts):
+    """
+    The partitioning sequence for the soma byoc
+    Parameters
+    ----------
+    mod The module to use
+
+    Returns
+    -------
+    The partitioned module.
+
+    """
     # Convert the layout of the graph where possible.
     seq = tvm.transform.Sequential(
         [
