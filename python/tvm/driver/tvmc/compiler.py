@@ -344,6 +344,7 @@ def compile_model(
                 use_vm=use_vm,
                 mod_name=mod_name,
             )
+    print(mod)
 
     # Generate output dump files with sources
     if dump_code is None:
