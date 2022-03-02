@@ -3,10 +3,9 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 stages:
   - build
-  - container
 
 build_tvm_fork:
-    stage: build_sw
+    stage: build
     image: ubuntu:20.04
     variables:
       DEBIAN_FRONTEND: noninteractive
