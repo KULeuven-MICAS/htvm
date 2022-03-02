@@ -26,7 +26,6 @@ RUN echo "export TVM_HOME=/tvm-fork\n" >> $HOME/.bashrc
 RUN echo "export PYTHONPATH=\$TVM_HOME/python:\$PYTHONPATH\n" >> $HOME/.bashrc
 # Adding useful commands to the bashrc
 RUN echo "function rebuild {\n\tcd \$TVM_HOME && git pull --ff && cd \$TVM_HOME/build && make -j10 && cd \$HOME\n}" >> $HOME/.bashrc
-# Setting the directory when entering the container back to the filesystem root
-WORKDIR "/"
 # install the tvm python libraries
+WORKDIR "/tvm-fork"
 RUN cd python; python3 setup.py install; cd ..
