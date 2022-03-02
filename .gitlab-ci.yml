@@ -8,10 +8,10 @@ build_tvm_fork:
     stage: build
     image: quay.io/containers/podman
     script:
-      - podman login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-      - podman pull $CI_REGISTRY_IMAGE:latest || true
-      - podman build --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:latest -f sirius/docker/Dockerfile.tvm .
-      - podman push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
-      - podman push $CI_REGISTRY_IMAGE:latest
+      - sudo podman login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+      - sudo podman pull $CI_REGISTRY_IMAGE:latest || true
+      - sudo podman build --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:latest -f sirius/docker/Dockerfile.tvm .
+      - sudo podman push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      - sudo podman push $CI_REGISTRY_IMAGE:latest
     tags:
       - podman
