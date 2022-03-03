@@ -1,8 +1,11 @@
 # Dockerfiles
 
+**These methods are now deprecated, for proper usage of Docker containers check .gitlab-ci.yml**
+_Note: The dockerfile.pulp builds the RISC-V toolchain, while a prebuilt version is available from https://github.com/pulp-platform/pulp-riscv-gnu-toolchain/releases/tag/v1.0.16_
+
 This folder contains two Dockerfiles:
 * `Dockerfile.pulp`: for running the pulp risc-v gcc c compiler.
-* `Dockerfile.tvm`: for running this repository.
+* ~`Dockerfile.tvm`: for running this repository.~
 
 ## Usage
 - Create an empty directory `mkdir directory`.

@@ -50,7 +50,7 @@ If you'd like to use `conda` (`anaconda` or `miniconda`) you can create a local 
 On Ubuntu or Ubuntu-derived distributions these dependencies can be obtained by executing these commands.
 ```bash
     sudo apt-get update
-    sudo apt-get install -y python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev
+    sudo apt-get install -y python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev llvm
 ```
 We use cmake to build the library.
 The configuration of TVM can be modified by `config.cmake`.
