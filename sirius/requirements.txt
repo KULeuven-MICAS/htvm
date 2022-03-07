@@ -1,6 +1,8 @@
 numpy
 decorator
 attrs
+scipy
+onnx
 
 # pytest required for using `import tvm.relay as relay`
 pytest
