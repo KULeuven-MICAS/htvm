@@ -3,6 +3,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
 stages:
   - build
+  - test
 
 build_tvm_fork:
     stage: build
@@ -18,3 +19,13 @@ build_tvm_fork:
       - web
     tags:
       - podman
+
+ews_tvmc:
+    stage: test
+    image: $CI_REGISTRY_IMAGE:latest
+    script:
+        - sh sirius/tests/tvmc_ews.sh
+    artifacts:
+        paths:
+            - module.tar    
+
