@@ -28,4 +28,7 @@ ews_tvmc:
     artifacts:
         paths:
             - module.tar    
+    tags:
+      - podman
+
 
