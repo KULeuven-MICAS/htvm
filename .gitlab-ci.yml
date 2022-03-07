@@ -13,5 +13,8 @@ build_tvm_fork:
       - sudo podman build --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:latest -f sirius/docker/Dockerfile.tvm .
       - sudo podman push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
       - sudo podman push $CI_REGISTRY_IMAGE:latest
+    only:
+      - merge_requests
+      - web
     tags:
       - podman
