@@ -92,7 +92,6 @@ def partition_for_soma(mod, params=None, dpu=None, **opts):
     The partitioned module.
 
     """
-    import pdb; pdb.set_trace()
     # Convert the layout of the graph where possible.
     seq = tvm.transform.Sequential(
         [
