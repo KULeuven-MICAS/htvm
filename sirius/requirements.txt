@@ -5,3 +5,6 @@ attrs
 # pytest required for using `import tvm.relay as relay`
 pytest
 
+# for tensorflow lite models
+tflite == 2.1.0
+
