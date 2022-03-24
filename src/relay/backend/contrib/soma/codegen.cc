@@ -108,6 +108,9 @@ std::vector<std::string> Add(const CallNode* call) {
   for (auto s : ishape) {
     args.push_back(std::to_string(s));
   }
+  // Hardcode 8 as precision
+  // TODO make this not hardcoded
+  args.push_back("8");
 
   return args;
 }
@@ -156,7 +159,6 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       // Get const: static_cast<float*>(dnnl_0_consts[0]->data)
       output.name = CreateDataReference(ext_func_id_, const_idx_);
       output.dtype = "float";
-
       // Generate the global variable for needed ndarrays
       if (const_array_name_.empty()) {
         const_array_name_ = CreateNDArrayPool(ext_func_id_);
@@ -244,7 +246,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
           {"qnn.dense", {"soma_dense8", Dense}},
           {"qnn.relu", {"soma_relu8", Relu}},
           {"qnn.batch_norm", {"soma_bn8", BatchNorm}},
-          {"add", {"soma_add8", Add}},
+          {"add", {"soma_wrapped_ews", Add}},
           {"nn.bias_add", {"soma_add8", Add}},
       };
 
@@ -321,7 +323,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
          output.size = out_size;
          output.dtype = GetDtypeString(out_type.as<TensorTypeNode>());
          output.need_copy = true;
-         ret.buffers.push_back("float* " + out + " = (float*)std::malloc(4 * " +
+         ret.buffers.push_back("int8_t* " + out + " = (int8_t *) malloc(4 * " +
                                std::to_string(out_size) + ");");
          ret.outputs.push_back(output);
        }
