@@ -9,7 +9,7 @@ from tvm.relay.expr import const
 from tvm.relay import transform
 from tvm.relay.build_module import bind_params_by_name
 from tvm.relay.testing.temp_op_attr import TempOpAttr
-from tvm.driver.tvmc import TVMCException
+#from tvm.driver.tvmc import TVMCException
 
 from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 from .register import register_pattern_table
@@ -106,6 +106,6 @@ def partition_for_soma(mod, params=None, dpu=None, **opts):
         try:
             return seq(mod)
         except Exception as err:
-            raise TVMCException(
+            raise Exception(
                 "Error converting layout to {0}".format(str(err))
             )
