@@ -33,6 +33,7 @@ inline size_t GetShape1DSize(const Type& type) {
 /*! Extract arguments from the call node, and constuct the args vector. (Next functions.) */
 
 std::vector<std::string> Conv2d(const CallNode* call) {
+  std::cout << "... Visiting Conv2d" << std::endl;
   std::vector<std::string> args;
   const auto* conv2d_attr = call->attrs.as<Conv2DAttrs>();
   CHECK(conv2d_attr);
@@ -60,6 +61,7 @@ std::vector<std::string> Conv2d(const CallNode* call) {
 }
 
 std::vector<std::string> Dense(const CallNode* call) {
+  std::cout << "... Visiting Dense" << std::endl;
   std::vector<std::string> args;
   auto ishape = GetShape(call->args[0]->checked_type());
   auto wshape = GetShape(call->args[1]->checked_type());
@@ -73,6 +75,7 @@ std::vector<std::string> Dense(const CallNode* call) {
 }
 
 std::vector<std::string> Relu(const CallNode* call) {
+  std::cout << "... Visiting Relu" << std::endl;
   std::vector<std::string> args;
   auto ishape = GetShape(call->args[0]->checked_type());
 
@@ -85,6 +88,7 @@ std::vector<std::string> Relu(const CallNode* call) {
 }
 
 std::vector<std::string> BatchNorm(const CallNode* call) {
+  std::cout << "... Visiting BatchNorm" << std::endl;
   std::vector<std::string> args;
   const auto* bn_attr = call->attrs.as<BatchNormAttrs>();
   auto ishape = GetShape(call->args[0]->checked_type());
@@ -101,6 +105,7 @@ std::vector<std::string> BatchNorm(const CallNode* call) {
 }
 
 std::vector<std::string> Add(const CallNode* call) {
+  std::cout << "... Visiting Add" << std::endl;
   std::vector<std::string> args;
   auto ishape = GetShape(call->args[0]->checked_type());
 
@@ -288,6 +293,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
                                      const std::vector<std::string>& attribute_args) {
        // Make function call with input buffers when visiting arguments
        CHECK_GT(func_args.size(), 0);
+       abort();
        std::ostringstream decl_stream;
        decl_stream << "(" << func_args[0];
        for (size_t i = 1; i < func_args.size(); ++i) {
