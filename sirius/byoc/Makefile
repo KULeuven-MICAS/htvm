@@ -27,7 +27,7 @@ PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
 # These targets don't make self-titled files
 .PHONY: all compile clean
 
-all: compile $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/libcodegen.a
+all: compile $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/libcodegen.a $(BUILD_DIR)/demo
 
 $(BUILD_DIR)/stack_allocator.o: $(STANDALONE_CRT_PATH)/src/runtime/crt/memory/stack_allocator.c
 	mkdir -p $(@D)
