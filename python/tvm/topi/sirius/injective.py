@@ -99,6 +99,8 @@ def schedule_injective(outs):
             continue
         else:
             # Tensorize!
+            logger.warning(f'{x.op.name}: **Tensorization of element wise sum disabled** ')
+            continue
             logger.warning(f'{x.op.name}: **Tensorizing** element wise sum')
             yo, yi = s[x].split(x.op.axis[-3], factor=ELEMENT_WISE_SIZE)
             stride_innermost = s[x].op.axis[-1].dom.extent
