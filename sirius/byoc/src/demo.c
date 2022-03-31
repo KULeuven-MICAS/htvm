@@ -15,10 +15,10 @@ int main(int argc, char** argv) {
 	static uint8_t g_aot_memory[WORKSPACE_SIZE];
 	StackMemoryManager_Init(&app_workspace, g_aot_memory, WORKSPACE_SIZE);
 
-	printf("Creating test inputs");
-	uint32_t w = 16;
-	uint32_t h = 16;
-	uint32_t c = 16;
+	printf("Creating test inputs\n");
+	uint32_t w = 3;
+	uint32_t h = 3;
+	uint32_t c = 3;
 	int8_t *a = malloc(w * h * c * sizeof(int8_t));
 	int8_t *b = malloc(w * h * c * sizeof(int8_t));
 	int8_t *output = malloc(w * h * c * sizeof(int8_t));

@@ -32,13 +32,13 @@ module = module.from_expr(sum_expr)
 # As in documentation: https://tvm.apache.org/2020/07/15/how-to-bring-your-own-codegen-to-tvm#bring-dnnl-to-tvm-annotation-rules
 
 #module = relay.transform.MergeComposite(soma.pattern_table())(module)
-module = relay.transform.AnnotateTarget(["soma"])(module)
-print(module)
+#module = relay.transform.AnnotateTarget(["soma"])(module)
+#print(module)
 #module = relay.transform.AnnotateTarget(["c"])(module)
-module = relay.transform.MergeCompilerRegions()(module)
-print(module)
-module = relay.transform.PartitionGraph()(module)
-print(module)
+#module = relay.transform.MergeCompilerRegions()(module)
+#print(module)
+#module = relay.transform.PartitionGraph()(module)
+#print(module)
 
 # Define a target for compilation
 target = tvm.target.Target("c")
@@ -73,7 +73,7 @@ from tvm.relay.backend import Executor, Runtime
 
 model = TVMCModel(module, new_params)
 compile_model(tvmc_model=model,
-              target="soma, c",
+              target="c",
               executor=Executor("aot",
                                 {"interface-api": "c",
                                  "unpacked-api": 1}

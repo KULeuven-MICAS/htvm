@@ -3,7 +3,8 @@ BUILD_DIR := build
 MODEL := model
 
 # Compiler options
-PKG_COMPILE_OPTS = -g -Wall -O0 -std=gnu99
+PKG_COMPILE_OPTS = -g -Wall -pedantic -O0 -std=gnu99
+PULP_COMPILE_OPTS = -DSDK -DSOMA_AUTO_DEBUG -m32 -DX86_SOMA
 
 # Include paths
 STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime
@@ -13,16 +14,25 @@ CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
+SOMA_LIB_PATH = /home/josse/phd/sirius-high-level-library
+SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
+SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
+
 # Compiler selection
 CC = gcc
 AR = ar
 RANLIB = ranlib
 
+# Compiler options and header includes
 PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
+	     ${PULP_COMPILE_OPTS}\
 	     -I${STANDALONE_CRT_PATH}/include \
 	     -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
 	     -I${CODEGEN_PATH}/host/include \
-	     -I${PWD}/include
+	     -I${PWD}/include \
+             -I${SOMA_LIB_PATH}/include
+
+# Compiler options for SOMA
 
 # These targets don't make self-titled files
 .PHONY: all compile clean
@@ -42,12 +52,12 @@ $(BUILD_DIR)/libcodegen.a: $(CODEGEN_SRCS)
 	$(AR) -cr $(abspath $(BUILD_DIR)/libcodegen.a) $(CODEGEN_OBJS)
 	$(RANLIB) $(abspath $(BUILD_DIR)/libcodegen.a)
 
-$(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a
+$(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a $(SOMA_SRCS)
 	mkdir -p $(@D)
 	$(CC) $(PKG_CFLAGS) -o  $@ $^
 
 
-compile:
+compile:clean
 	# Create model.tar for int8 sum
 	python soma_codegen.py
 	# Create build directory and move and unpack model mlf there
