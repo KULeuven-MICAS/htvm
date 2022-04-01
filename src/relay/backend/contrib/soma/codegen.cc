@@ -323,7 +323,8 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
          output.size = out_size;
          output.dtype = GetDtypeString(out_type.as<TensorTypeNode>());
          output.need_copy = true;
-         ret.buffers.push_back("int8_t* " + out + " = (int8_t *) malloc(4 * " +
+	 // TODO hardcoded to int8_t; if type changes from bit, malloc has to be adapted
+         ret.buffers.push_back("int8_t* " + out + " = (int8_t *) malloc(" +
                                std::to_string(out_size) + ");");
          ret.outputs.push_back(output);
        }
