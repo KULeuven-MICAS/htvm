@@ -4,7 +4,7 @@ MODEL := model
 
 # Compiler options
 PKG_COMPILE_OPTS = -Wall -pedantic -O0 -std=gnu99
-PULP_COMPILE_OPTS = -DSDK -m32 -DX86_SOMA
+PULP_COMPILE_OPTS = -DSDK
 # For debug support - comment these out for reduced binary size
 PKG_COMPILE_OPTS += -g
 PULP_COMPILE_OPTS += -DSOMA_AUTO_DEBUG
@@ -22,9 +22,11 @@ SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
 SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
 
 # Compiler selection
-CC = gcc
-AR = ar
-RANLIB = ranlib
+CC = riscv32-unknown-elf-gcc
+AR = riscv32-unknown-elf-ar
+RANLIB = riscv32-unknown-elf-ranlib
+
+include $(PULP_SDK_HOME)/install/rules/pulp.mk
 
 # Compiler options and header includes
 PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
