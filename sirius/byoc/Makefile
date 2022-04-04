@@ -65,8 +65,9 @@ compile:clean
 	mv $(MODEL).tar $(BUILD_DIR)
 	tar -xf $(BUILD_DIR)/$(MODEL).tar --directory=$(BUILD_DIR)
 	rm $(BUILD_DIR)/$(MODEL).tar
-	$(eval CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c))
-	$(eval CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS)))
+	# Re-evaluate the codegen sources after creating the files
+	$(eval CODEGEN_SRCS=$$(wildcard $$(abspath $$(BUILD_DIR))/codegen/host/src/*.c))
+	$(eval CODEGEN_OBJS=$$(subst .c,.o,$(CODEGEN_SRCS)))
 
 
 clean:
