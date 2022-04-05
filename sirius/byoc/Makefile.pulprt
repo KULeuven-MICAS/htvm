@@ -1,0 +1,47 @@
+################################### METADATA ###################################
+
+# Contributors: Vincent Tableau Roche
+# Contacts: vincent.tableau@esat.kuleuven.be
+# Creation Date: 2021-03-02
+# Language: Makefile
+
+################################### ALIASES ####################################
+
+BUILD_DIR := build
+# Include paths
+STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime
+CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
+
+# Sources
+CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
+CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
+
+SOMA_LIB_PATH = /esat/sol1/users/jvandelm/diana-proper/diana-toplevel/sirius-high-level-library
+SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
+SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
+
+INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
+			 -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
+			 -I${CODEGEN_PATH}/host/include \
+			 -I${PWD}/include \
+             -I${SOMA_LIB_PATH}/include
+
+# Defining the source files for pulp-runtime
+PULP_APP = demo
+PULP_APP_SRCS = $(SOMA_SRCS) $(CODEGEN_SRCS) $(abspath src/demo.c)
+PULP_INC_PATHS += -DSDK
+PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS)
+# Uncomment to trigger the auto debugging in the hardware library.
+PULP_CFLAGS += -DSOMA_AUTO_DEBUG
+# Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
+# PULP_CFLAGS += -DRUNTIME_SOMA
+
+################################### SPECIAL ####################################
+
+# The special rule modifiers (.PHONY etc...) go here
+
+#################################### RULES #####################################
+
+include $(PULP_SDK_HOME)/install/rules/pulp.mk
+
+##################################### EOF ######################################
