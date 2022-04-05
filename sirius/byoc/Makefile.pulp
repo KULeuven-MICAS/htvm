@@ -17,17 +17,55 @@ CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
-SOMA_LIB_PATH = /home/josse/phd/sirius-high-level-library
+SOMA_LIB_PATH = /esat/sol1/users/jvandelm/diana-proper/diana-toplevel/sirius-high-level-library
 SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
 SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
 
 # Compiler selection
-CC = riscv32-unknown-elf-gcc
-AR = riscv32-unknown-elf-ar
-RANLIB = riscv32-unknown-elf-ranlib
+# PULP_RISCV_GCC_TOOLCHAIN is set by sourcing sourceme.sh in toplevel repo
+CC = $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-gcc
+AR = $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-ar
+RANLIB = $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-ranlib
 
-include $(PULP_SDK_HOME)/install/rules/pulp.mk
+# These were taken out of __flags.mk with default settings
+PULP_FC_ARCH_CFLAGS ?=  -march=rv32imfcxpulpv2 \
+						-mfdiv \
+						-D__riscv__
+PULP_FC_CFLAGS    += -fdata-sections \
+					 -ffunction-sections \
+					 -I/users/micas/jvandelm/onsol/diana-proper/diana-toplevel/diana-rtl/pulp-sdk-diana/pkg/sdk/dev/install/include/io \
+					 -I/users/micas/jvandelm/onsol/diana-proper/diana-toplevel/diana-rtl/pulp-sdk-diana/pkg/sdk/dev/install/include \
+					 -include $(abspath build/pulpissimo/fc_config.h)
+PULP_FC_OMP_CFLAGS    += -fopenmp -mnativeomp
 
+PULP_FC_CC = $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-gcc 
+PULP_CC = $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-gcc 
+PULP_AR ?= $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-ar
+PULP_LD ?= $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-gcc
+PULP_FC_OBJDUMP ?= $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-objdump
+PULP_OBJDUMP ?= $(PULP_RISCV_GCC_TOOLCHAIN)/bin/riscv32-unknown-elf-objdump
+
+PULP_ARCH_FC_OBJDFLAGS ?= -Mmarch=rv32imfcxpulpv2
+PULP_ARCH_OBJDFLAGS ?= -Mmarch=rv32imfcxpulpv2
+PULP_ARCH_LDFLAGS ?=  -march=rv32imfcxpulpv2 -mfdiv -D__riscv__
+PULP_LDFLAGS_demo = -nostartfiles \
+					-nostdlib \
+				   	-Wl,--gc-sections \
+					-L/users/micas/jvandelm/onsol/diana-proper/diana-toplevel/diana-rtl/pulp-sdk-diana/pkg/sdk/dev/install/rules \
+				   	-L/users/micas/jvandelm/onsol/diana-proper/diana-toplevel/diana-rtl/pulp-sdk-diana/pkg/sdk/dev/install/lib/pulpissimo \
+				   	-L/users/micas/jvandelm/onsol/diana-proper/diana-toplevel/diana-rtl/pulp-sdk-diana/pkg/sdk/dev/install/lib/pulpissimo/pulpissimo \
+					-lrt \
+					-lrtio \
+					-lrt \
+					-lgcc \
+					-Tpulpissimo/link.ld
+
+PULP_OMP_LDFLAGS_demo = -lomp
+
+pulpRunOpt        += --dir=build/pulpissimo --binary=demo/demo
+# End of what comes out of __flags.mk
+
+PULP_COMPILE_OPTS += $(PULP_FC_ARCH_CFLAGS) $(PULP_FC_CFLAGS)
 # Compiler options and header includes
 PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
 	     ${PULP_COMPILE_OPTS}\
@@ -35,7 +73,7 @@ PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
 	     -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
 	     -I${CODEGEN_PATH}/host/include \
 	     -I${PWD}/include \
-             -I${SOMA_LIB_PATH}/include
+         -I${SOMA_LIB_PATH}/include
 
 # These targets don't make self-titled files
 .PHONY: all compile clean
@@ -57,7 +95,7 @@ $(BUILD_DIR)/libcodegen.a: $(CODEGEN_SRCS)
 
 $(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a $(SOMA_SRCS)
 	mkdir -p $(@D)
-	$(CC) $(PKG_CFLAGS) -o  $@ $^
+	$(CC) $(PKG_CFLAGS) $(PULP_LDFLAGS_demo) -o  $@ $^ --verbose --save-temps
 
 
 compile:clean
