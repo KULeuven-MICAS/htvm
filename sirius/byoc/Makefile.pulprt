@@ -13,6 +13,9 @@ STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime
 CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 
 # Sources
+STANDALONE_CRT_SRCS := $(STANDALONE_CRT_PATH)/src/runtime/crt/common/crt_backend_api.c
+STANDALONE_CRT_SRCS += $(STANDALONE_CRT_PATH)/src/runtime/crt/memory/stack_allocator.c
+
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
@@ -28,7 +31,7 @@ INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
 
 # Defining the source files for pulp-runtime
 PULP_APP = demo
-PULP_APP_SRCS = $(SOMA_SRCS) $(CODEGEN_SRCS) $(abspath src/demo.c)
+PULP_APP_SRCS = $(SOMA_SRCS) $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(abspath src/demo.c) 
 PULP_INC_PATHS += -DSDK
 PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS)
 # Uncomment to trigger the auto debugging in the hardware library.
@@ -41,6 +44,8 @@ PULP_CFLAGS += -DSOMA_AUTO_DEBUG
 # The special rule modifiers (.PHONY etc...) go here
 
 #################################### RULES #####################################
+
+$(info $$STANDALONE_CRT_SRCS is [$(STANDALONE_CRT_SRCS)])
 
 include $(PULP_SDK_HOME)/install/rules/pulp.mk
 
