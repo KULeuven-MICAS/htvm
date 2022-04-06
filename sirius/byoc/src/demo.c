@@ -3,7 +3,7 @@
 #include <tvm_runtime.h>
 #include "tvmgen_default.h"
 
-#define WORKSPACE_SIZE (16384 * 1024)
+#define WORKSPACE_SIZE (16 * 1024)
 
 int abs(int v) {return v * ((v > 0) - (v < 0)); }
 
