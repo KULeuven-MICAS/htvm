@@ -43,6 +43,15 @@ int main(int argc, char** argv) {
 		.b = b,
 	};
 	tvmgen_default_run(&inputs, &outputs);
+    for (int i = 0; i < w; i++) {
+		for (int j = 0; j < h; j++) {
+		    for (int k = 0; k < c; k++) {
+			// Getting the position in the row-major-ordered arrays.
+			unsigned int position = i * h * c + j * c + k;
+			printf("[%d,%d,%d]<%d>\n", i, j, k, output[position]);
+		    }
+		}
+	}
 	printf("Inference done\n");
 	return 0;
 }
