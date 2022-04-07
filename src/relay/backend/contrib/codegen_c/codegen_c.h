@@ -290,9 +290,7 @@ class CodegenCBase {
     }
     // Create the signature. For example, it could be:
     // void dnnl_0_(float* in0, float* in1, float* out0, float* out1) {}
-    // TODO I removed this "_". Is this okay?
-    //code_stream_ << "void " << ext_func_id << "_(";
-    code_stream_ << "void " << ext_func_id << "(";
+    code_stream_ << "void " << ext_func_id << "_(";
 
     for (const auto& arg : args) {
       const auto& dtype_str = GetDtypeString(arg);
@@ -321,10 +319,7 @@ class CodegenCBase {
         continue;
       }
       this->PrintIndents();
-      //TODO Do this in a nice way :D 
-      // Adapt to type e.g. 4* for int32?
-      // 		    (1*) for int8
-      code_stream_ << "memcpy(out" << i << ", " << outs[i].name << ", " << outs[i].size
+      code_stream_ << "memcpy(out" << i << ", " << outs[i].name << ", 4 * " << outs[i].size
                    << ");\n";
     }
 
@@ -338,8 +333,7 @@ class CodegenCBase {
     code_stream_ << "}\n";
 
     // Create the wrapper to call the ext_func
-    // TODO I just disabled this :D 
-    //this->GenerateBackendCFunc(ext_func_id, args, const_arr_name, outs);
+    this->GenerateBackendCFunc(ext_func_id, args, const_arr_name, outs);
     return code_stream_.str();
   }
 
