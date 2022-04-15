@@ -291,17 +291,56 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       std::vector<std::string> buffers;
       std::vector<Output> outputs;
       };
-
-      std::vector<std::string> GetArgumentNames(const CallNode* call) {
-        std::vector<std::string> arg_names;
-        for (size_t i = 0; i < call->args.size(); ++i) {
-          auto res = VisitExpr(call->args[i]);
-          for (const auto& out : res) {
-            arg_names.push_back(out.name);
-          }
-        }
-        return arg_names;
+    
+    // takes shape as returned by GetShape()
+    // Example of what generated code should look like:
+    //
+    //   uint32_t shape_array[3] = {1,2,3};
+    //   SomaShape tensor_shape = {
+    //     .tensor_size = 6,
+    //     .shape_size = 3,
+    //     .shape = shape_array
+    //   };
+    //
+    std::ostringstream GenerateSomaShape(const std::vector<int>& shape){
+      std::ostringstream shape_stream;
+      int tensor_size = 1;
+      for (auto shape_el : shape){
+        tensor_size *= shape_el;
       }
+      int shape_size = shape.size();
+      CHECK_GE(tensor_size, 1) << "tensor_size cannot be smaller than 1";
+      // shape array which will be referenced in 
+      shape_stream << " uint32_t shape_array[" << shape_size << "] = {";
+      // add all shape elements
+      auto end = shape.end() - 1;
+      for (auto shape_el = shape.begin(); shape_el != end; ++shape_el){
+        shape_stream << *shape_el;
+        if (shape_el != shape.end()){
+          shape_stream << ", ";
+        }
+      }
+      shape_stream << "};\n";
+      // Create the actual shape
+      shape_stream << "SomaShape tensor_shape = {\n";
+      shape_stream << "    .tensor_size = " << tensor_size << "\n";
+      shape_stream << "    .shape_size = " << shape_size << "\n";
+      shape_stream << "    .shape = shape_array\n";
+      shape_stream << "};\n";
+      return shape_stream;
+    }
+    
+
+    std::vector<std::string> GetArgumentNames(const CallNode* call) {
+      std::vector<std::string> arg_names;
+      for (size_t i = 0; i < call->args.size(); ++i) {
+        auto res = VisitExpr(call->args[i]);
+        for (const auto& out : res) {
+          arg_names.push_back(out.name);
+        }
+      }
+      return arg_names;
+    }
 
     /*!
     * \brief Returns dtype string, extended drom CodeGenCBase to also support int8
