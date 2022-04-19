@@ -52,19 +52,26 @@ def input_maker(w, h, c):
     for i in range(w):
         for j in range(h):
             for k in range(c):
-                position = i*h*c + j*c + k;
-                input_a[position] = i*j + k 
+                position = i*h*c + j*c + k
+                input_a[position] = i*j + k
                 input_b[position] = i + j - 2*k
     return input_a, input_b
- 
+
+
 if __name__ == "__main__":
     tensor_shape = (3, 15, 17)
     data_type = "int8"
     # Construct the variables --> tvm.relay.Var type
     a = relay.var("a", tvm.relay.TensorType(tensor_shape, data_type))
     b = relay.var("b", tvm.relay.TensorType(tensor_shape, data_type))
+    total = np.product(tensor_shape)
+
+    constant_tensor = np.arange(0, total, dtype=data_type)
+    constant_tensor = np.reshape(constant_tensor, tensor_shape)
+    c = relay.const(constant_tensor,
+                    tvm.relay.TensorType(tensor_shape, data_type))
     # Then we tell it to add the two variables --> tvm.relay.Expr type
-    sum_expr = relay.add(a, b)
+    sum_expr = relay.add(c, relay.add(a, b))
     # Now create an IRModule from the tvm.relay.Expr file
     module = tvm.ir.IRModule()
     module = module.from_expr(sum_expr)
