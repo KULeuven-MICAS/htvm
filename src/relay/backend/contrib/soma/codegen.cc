@@ -158,7 +158,12 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       Output output;
       // Get const: static_cast<float*>(dnnl_0_consts[0]->data)
       output.name = CreateDataReference(ext_func_id_, const_idx_);
-      output.dtype = "float";
+
+      const auto* type_node = cn->checked_type().as<TensorTypeNode>();
+      //CHECK(type_node);
+      //CHECK_EQ(GetDtypeString(type_node), "float") << "Only float is supported for now.";
+      
+      output.dtype = GetDtypeString(type_node);
       // Generate the global variable for needed ndarrays
       if (const_array_name_.empty()) {
         const_array_name_ = CreateNDArrayPool(ext_func_id_);
@@ -171,11 +176,6 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       std::string const_var_name = CreateConstVar(ext_func_id_, const_idx_);
       const_vars_.push_back(const_var_name);
       const_idx_++;
-
-      const auto* type_node = cn->checked_type().as<TensorTypeNode>();
-      CHECK(type_node);
-      CHECK_EQ(GetDtypeString(type_node), "float") << "Only float is supported for now.";
-
       return {output};
     }
 
