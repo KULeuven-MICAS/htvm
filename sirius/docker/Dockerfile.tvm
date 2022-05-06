@@ -1,31 +1,18 @@
 # Starting from Ubuntu 20.04
 FROM ubuntu:20.04
-# copy entire repo in container
-COPY . /tvm-fork
 # Updating apt
 RUN apt-get update
 # Setting values for tzdata
 ENV DEBIAN_FRONTEND=noninteractive
-# Setting up dependancies for tvm
+# Setting up dependencies for tvm
 RUN apt-get install -y git python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev python3-pip llvm
-# Moving inside the tvm source code.
-WORKDIR "/tvm-fork"
+# Setting up dependencies for utvm compilation
+RUN dpkg --add-architecture i386
+RUN apt-get update && apt-get install -y gcc-multilib libc6-dbg:i386
 # Installing dependencies of the python package
 RUN pip3 install numpy decorator attrs scipy pytest
-RUN pip3 install -r sirius/requirements.txt
+# copy requirements in container 
+COPY sirius/requirements.txt /tvm-fork/sirius/requirements.txt
+# Installing dependencies of the python package
+RUN pip3 install -r /tvm-fork/sirius/requirements.txt
 # Creating directory for built tvm library.
-RUN mkdir build
-# Copying CMake configuration
-RUN cp sirius/config.cmake build
-# Going to the build directory for compilation.
-WORKDIR "/tvm-fork/build"
-RUN cmake ..
-RUN make -j10
-# Setting the right environment values in the .bashrc
-RUN echo "export TVM_HOME=/tvm-fork\n" >> $HOME/.bashrc
-RUN echo "export PYTHONPATH=\$TVM_HOME/python:\$PYTHONPATH\n" >> $HOME/.bashrc
-# Adding useful commands to the bashrc
-RUN echo "function rebuild {\n\tcd \$TVM_HOME && git pull --ff && cd \$TVM_HOME/build && make -j10 && cd \$HOME\n}" >> $HOME/.bashrc
-# install the tvm python libraries
-WORKDIR "/tvm-fork"
-RUN cd python; python3 setup.py install; cd ..
