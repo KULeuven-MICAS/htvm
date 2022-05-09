@@ -18,6 +18,8 @@
 #include "../../utils.h"
 
 #include "../codegen_c/codegen_c.h"
+#include "../../../../target/source/codegen_c.h"
+#include "../../../../target/source/codegen_c_host.h"
 
 namespace tvm {
 namespace relay {
@@ -502,10 +504,11 @@ class SOMAModuleCodegen : public CSourceModuleCodegenBase {
       Array<String> syms = {sym};
 
       // Create a CSource module with all above artifacts.
-      const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
-      CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
-      auto ret = (*pf)(code, "c", syms, variables);
-      return ret;
+      //const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
+      //CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
+      //auto ret = (*pf)(code, "c", syms, variables);
+      //return ret;
+      return codegen::CSourceModuleCreate(code, "c", syms);
     }
 
   private:
