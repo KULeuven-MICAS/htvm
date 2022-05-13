@@ -2,10 +2,14 @@
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 stages:
-  - build
+    - build_container
+    - build_tvm
+    - test_tvm
+    - build_utvm
+    - test_utvm
 
-build_tvm_fork:
-    stage: build
+build_container:
+    stage: build_container
     image: quay.io/containers/podman
     script:
       - sudo podman login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -13,8 +17,71 @@ build_tvm_fork:
       - sudo podman build --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:latest -f sirius/docker/Dockerfile.tvm .
       - sudo podman push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
       - sudo podman push $CI_REGISTRY_IMAGE:latest
-    only:
-      - merge_requests
-      - web
+    tags:
+      - podman
+
+build_tvm_release:
+    stage: build_tvm
+    image: $CI_REGISTRY_IMAGE:latest
+    script:
+      - mkdir build
+      - cp sirius/config.cmake build
+      - cd build
+      - cmake ..
+      - make -j 10
+      - cd ..
+    artifacts:
+      paths:
+        - build
+    tags:
+      - podman
+
+compile_ews:
+    stage: test_tvm
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 soma_codegen.py 
+      - mkdir -p build
+      - mv model.tar build
+      - tar -xf build/model.tar --directory=build
+      - rm build/model.tar
+    artifacts:
+      paths:
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+build_ews:
+    stage: build_utvm
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies:
+      - compile_ews
+    script:
+      - cd sirius/byoc/build
+      - git clone https://${CI_USERNAME_SIRIUS_HIGH_LEVEL_LIBRARY}:${CI_PASSWORD_SIRIUS_HIGH_LEVEL_LIBRARY}@gitlab.com/soma_library/sirius-high-level-library
+      - cd sirius-high-level-library
+      - git checkout 5315128
+      - cd ../..
+      - make -f Makefile.x86 build/stack_allocator.o build/crt_backend_api.o build/libcodegen.a build/demo
+    artifacts:
+      paths:
+        - sirius/byoc/build/demo
+    tags:
+      - podman
+
+run_ews:
+    stage: test_utvm
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies:
+      - build_ews
+    script:
+      - sirius/byoc/build/demo
     tags:
       - podman

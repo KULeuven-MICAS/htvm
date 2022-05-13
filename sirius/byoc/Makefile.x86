@@ -1,6 +1,7 @@
 # General settings
 BUILD_DIR := build
 MODEL := model
+PYTHON := python3
 
 # Compiler options
 PKG_COMPILE_OPTS = -Wall -pedantic -O0 -std=gnu99
@@ -17,7 +18,7 @@ CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
-SOMA_LIB_PATH = /home/josse/phd/sirius-high-level-library
+SOMA_LIB_PATH = $(abspath $(BUILD_DIR))/sirius-high-level-library
 SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
 SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
 
@@ -60,7 +61,7 @@ $(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)
 
 compile:clean
 	# Create model.tar for int8 sum
-	python soma_codegen.py
+	$(PYTHON) soma_codegen.py
 	# Create build directory and move and unpack model mlf there
 	mkdir -p $(BUILD_DIR)
 	mv $(MODEL).tar $(BUILD_DIR)
