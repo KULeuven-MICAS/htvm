@@ -156,16 +156,18 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       return {res[op->index]};
     }
 
+    /*
     std::vector<Output> VisitExpr_(const ConstantNode* cn) final {
       Output output;
-      // Get const: static_cast<float*>(dnnl_0_consts[0]->data)
-      output.name = CreateDataReference(ext_func_id_, const_idx_);
 
       const auto* type_node = cn->checked_type().as<TensorTypeNode>();
       //CHECK(type_node);
       //CHECK_EQ(GetDtypeString(type_node), "float") << "Only float is supported for now.";
       
       output.dtype = GetDtypeString(type_node);
+
+      output.name = CreateDataReference(ext_func_id_, output.dtype, const_idx_);
+
       // Generate the global variable for needed ndarrays
       if (const_array_name_.empty()) {
         const_array_name_ = CreateNDArrayPool(ext_func_id_);
@@ -179,7 +181,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       const_vars_.push_back(const_var_name);
       const_idx_++;
       return {output};
-    }
+    }*/
 
     std::vector<Output> VisitExpr_(const CallNode* call) final {
       GenerateBodyOutput ret;
@@ -259,11 +261,8 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
           continue;
         }
         this->PrintIndents();
-        //TODO Do this in a nice way :D 
-        // Adapt to type e.g. 4* for int32?
-        // 		    (1*) for int8
         code_stream_ << "memcpy(out" << i << ", " << outs[i].name << ", " << outs[i].size
-          	   << ");\n";
+          	         << " * sizeof(" << outs[i].dtype << "));\n";
       }
     
         // Free buffers
@@ -414,9 +413,9 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
          output.size = out_size;
          output.dtype = GetDtypeString(out_type.as<TensorTypeNode>());
          output.need_copy = true;
-	 // TODO hardcoded to int8_t; if type changes from bit, malloc has to be adapted
-         ret.buffers.push_back("int8_t* " + out + " = (int8_t *) malloc(" +
-                               std::to_string(out_size) + ");");
+         std::string decl_buf = output.dtype + "* " + output.name + " = malloc(" + std::to_string(out_size) +
+                                " * sizeof(" + output.dtype + "));";
+         ret.buffers.push_back(decl_buf);
          ret.outputs.push_back(output);
        }
 

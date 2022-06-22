@@ -414,6 +414,19 @@ class CodegenCBase {
   }
 
   /*!
+   * \brief Generates the reference to the data of a constant ndarray
+   *
+   * \param symobl The Symbol of the current function
+   * \param dtype  The data type of the constant
+   * \param symobl const_id The index of the constant
+   *
+   * \return The created reference
+   */
+  std::string CreateDataReference(const std::string& symbol, const std::string& dtype, int const_id) const {
+    return "(" + dtype + "*)(" + symbol + "_consts[" + std::to_string(const_id) + "]->data)";
+  }
+
+  /*!
    * \brief Returns the variable name for a constant variable
    *
    * \param symobl The Symbol of the current function
