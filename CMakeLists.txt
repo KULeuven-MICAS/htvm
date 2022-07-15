@@ -497,11 +497,8 @@ include(cmake/modules/contrib/ArmComputeLib.cmake)
 include(cmake/modules/contrib/TensorRT.cmake)
 include(cmake/modules/contrib/VitisAI.cmake)
 include(cmake/modules/contrib/Verilator.cmake)
-<<<<<<< HEAD
 include(cmake/modules/contrib/CLML.cmake)
-=======
 include(cmake/modules/contrib/SOMA.cmake)
->>>>>>> [WIP] Some progress towards BYOC for SOMA, not sure if the right codegen is being used when running... Based this on a lot of DNNL codegen code.
 include(cmake/modules/Git.cmake)
 include(cmake/modules/LibInfo.cmake)
 include(cmake/modules/RustExt.cmake)

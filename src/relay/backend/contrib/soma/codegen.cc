@@ -16,8 +16,11 @@
 #include <sstream>
 
 #include "../../utils.h"
+#include "../../../transforms/pattern_utils.h"
 
 #include "../codegen_c/codegen_c.h"
+#include "../../../../target/source/codegen_c.h"
+#include "../../../../target/source/codegen_c_host.h"
 
 namespace tvm {
 namespace relay {
@@ -30,33 +33,56 @@ inline size_t GetShape1DSize(const Type& type) {
   return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
 }
 
-/*! Extract arguments from the call node, and constuct the args vector. (Next functions.) */
+/*! Extract arguments needed to make a soma call and put them in a map */
 
-std::vector<std::string> Conv2d(const CallNode* call) {
-  std::vector<std::string> args;
-  const auto* conv2d_attr = call->attrs.as<Conv2DAttrs>();
-  CHECK(conv2d_attr);
+std::map<std::string, int> GetConv2dAttributes(const FunctionNode* func_call) {
+    std::map<std::string, int> args;
 
-  auto ishape = GetShape(call->args[0]->checked_type());
-  auto wshape = GetShape(call->args[1]->checked_type());
+    const auto* final_call = func_call->body.as<CallNode>();
+    const auto* conv_call = GetRootCall(func_call->body.as<CallNode>(), "qnn.conv2d");
+    const auto* requant_call = GetRootCall(func_call->body.as<CallNode>(), "qnn.requantize");
 
-  // Args: N, C, H, W
-  for (auto s : ishape) {
-    args.push_back(std::to_string(s));
-  }
+    const auto* conv2d_attr = conv_call->attrs.as<Conv2DAttrs>();
+    CHECK(conv2d_attr);
 
-  // Args: Outputs, Groups, vertical padding, horizontal padding,
-  // width, height, vertical stride, horizontal strid
-  args.push_back(std::to_string(wshape[0]));
-  args.push_back(std::to_string(conv2d_attr->groups)); // Used to parallelise the workload or to split operations.
-  args.push_back(std::to_string(conv2d_attr->padding[0].as<IntImmNode>()->value));
-  args.push_back(std::to_string(conv2d_attr->padding[1].as<IntImmNode>()->value));
-  args.push_back(std::to_string(wshape[2]));
-  args.push_back(std::to_string(wshape[3]));
-  args.push_back(std::to_string(conv2d_attr->strides[0].as<IntImmNode>()->value));
-  args.push_back(std::to_string(conv2d_attr->strides[1].as<IntImmNode>()->value));
+    auto ishape = GetShape(conv_call->args[0]->checked_type());
+    auto wshape = GetShape(conv_call->args[1]->checked_type());
+    auto oshape = GetShape(requant_call->args[0]->checked_type());  // output shape of conv2d is input shape of requant op
 
-  return args;
+    // get conv_params (assume the ranges are already checked)
+    args.insert({"pad_up_down", conv2d_attr->padding[0].as<IntImmNode>()->value});
+    args.insert({"pad_left_right", conv2d_attr->padding[1].as<IntImmNode>()->value});
+
+    args.insert({"conv_strided", 0});
+    if (conv2d_attr->strides[0].as<IntImmNode>()->value > 1) {
+        args["conv_strided"] = 1;   // only support symmetric strides 1 or 2
+    }
+
+    if (IsOp(final_call, "clip")) {
+        args.insert({"activation_function", 1});
+    }
+
+    float div =  GetScalarFromConstant<float>(requant_call->args[3]);
+    int right_shift = std::log2(div);
+    args.insert({"shift_fixed_point", right_shift});
+
+    // get input_dims
+    args.insert({"input_dims_c", ishape[1]});
+    args.insert({"input_dims_h", ishape[2]});
+    args.insert({"input_dims_w", ishape[3]});
+
+    // get filter_dims: TODO: layout conversion may be needed
+    args.insert({"filter_dims_k",  wshape[0]});
+    args.insert({"filter_dims_c",  wshape[1]});
+    args.insert({"filter_dims_fy", wshape[2]});
+    args.insert({"filter_dims_fx", wshape[3]});
+
+    // get output_dims
+    args.insert({"output_dims_c", oshape[1]});
+    args.insert({"output_dims_h", oshape[2]});
+    args.insert({"output_dims_w", oshape[3]});
+
+    return args;
 }
 
 std::vector<std::string> Dense(const CallNode* call) {
@@ -156,9 +182,15 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
 
     std::vector<Output> VisitExpr_(const ConstantNode* cn) final {
       Output output;
-      // Get const: static_cast<float*>(dnnl_0_consts[0]->data)
+
+      const auto* type_node = cn->checked_type().as<TensorTypeNode>();
+      //CHECK(type_node);
+      //CHECK_EQ(GetDtypeString(type_node), "float") << "Only float is supported for now.";
+
+      output.dtype = GetDtypeString(type_node);
+
       output.name = CreateDataReference(ext_func_id_, const_idx_);
-      output.dtype = "float";
+
       // Generate the global variable for needed ndarrays
       if (const_array_name_.empty()) {
         const_array_name_ = CreateNDArrayPool(ext_func_id_);
@@ -171,11 +203,6 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       std::string const_var_name = CreateConstVar(ext_func_id_, const_idx_);
       const_vars_.push_back(const_var_name);
       const_idx_++;
-
-      const auto* type_node = cn->checked_type().as<TensorTypeNode>();
-      CHECK(type_node);
-      CHECK_EQ(GetDtypeString(type_node), "float") << "Only float is supported for now.";
-
       return {output};
     }
 
@@ -185,11 +212,11 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       if (const auto* func = call->op.as<FunctionNode>()) {
         ret = GenerateCompositeFunctionCall(func, call);
       } else {
-        ret = GenerateOpCall(call);
+        // TODO: raise an error since we don't accelerate non partitioned calls
       }
 
       buf_decl_.insert(buf_decl_.end(), ret.buffers.begin(), ret.buffers.end());
-      ext_func_body_.push_back(ret.decl);
+      ext_func_body_.insert(ext_func_body_.end(), ret.decl.begin(), ret.decl.end());    // extend this vector
       return ret.outputs;
     }
 
@@ -228,8 +255,8 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       // void dnnl_0_(float* in0, float* in1, float* out0, float* out1) {}
       // TODO I removed this "_". Is this okay?
       //code_stream_ << "void " << ext_func_id << "_(";
-      code_stream_ << "void " << ext_func_id << "(";
-    
+      code_stream_ << "int32_t " << ext_func_id << "(";
+
       for (const auto& arg : args) {
         const auto& dtype_str = GetDtypeString(arg);
         code_stream_ << dtype_str << "* " << arg->name_hint() << ", ";
@@ -239,7 +266,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       }
       code_stream_ << outs.back().dtype << "* out" << outs.size() - 1 << ") {\n";
       this->EnterScope();
-    
+
       // Function body
       for (auto decl : buf_decl) {
         this->PrintIndents();
@@ -250,31 +277,28 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
         this->PrintIndents();
         code_stream_ << stmt << "\n";
       }
-    
+
       // Copy output
       for (size_t i = 0; i < outs.size(); ++i) {
         if (!outs[i].need_copy) {
           continue;
         }
         this->PrintIndents();
-        //TODO Do this in a nice way :D 
-        // Adapt to type e.g. 4* for int32?
-        // 		    (1*) for int8
         code_stream_ << "memcpy(out" << i << ", " << outs[i].name << ", " << outs[i].size
-          	   << ");\n";
+          	         << " * sizeof(" << outs[i].dtype << "));\n";
       }
-    
+
         // Free buffers
         for (size_t i = 0; i < buf_decl.size(); i++) {
           this->PrintIndents();
           code_stream_ << "free(buf_" << i << ");\n";
         }
-    
+
         this->ExitScope();
         code_stream_ << "}\n";
-    
+
         // Create the wrapper to call the ext_func
-        // TODO I just disabled this :D 
+        // TODO I just disabled this :D
         //this->GenerateBackendCFunc(ext_func_id, args, const_arr_name, outs);
         return code_stream_.str();
       }
@@ -287,7 +311,7 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
 
   private:
     struct GenerateBodyOutput {
-      std::string decl;
+      std::vector<std::string> decl;
       std::vector<std::string> buffers;
       std::vector<Output> outputs;
       };
@@ -322,110 +346,90 @@ class CodeGenSOMA : public MemoizedExprTranslator<std::vector<Output>>, public C
       return dtype;
     }
 
-    GenerateBodyOutput GenerateOpCall(const CallNode* call) {
-      const auto* op_node = call->op.as<OpNode>();
-      CHECK(op_node) << "Expect OpNode, but got " << call->op->GetTypeKey();
-      using ArgFunType = std::function<std::vector<std::string>(const CallNode*)>;
-      static const std::map<std::string, std::pair<std::string, ArgFunType>> op_map = {
-          {"nn.conv2d", {"soma_conv2d8", Conv2d}},
-          {"nn.dense", {"soma_dense8", Dense}},
-          {"nn.relu", {"soma_relu8", Relu}},
-          {"nn.batch_norm", {"soma_bn8", BatchNorm}},
-          {"qnn.conv2d", {"soma_conv2d8", Conv2d}},
-          {"qnn.dense", {"soma_dense8", Dense}},
-          {"qnn.relu", {"soma_relu8", Relu}},
-          {"qnn.batch_norm", {"soma_bn8", BatchNorm}},
-          {"add", {"soma_wrapped_ews", Add}},
-          {"nn.bias_add", {"soma_add8", Add}},
-      };
+    GenerateBodyOutput GenerateCompositeFunctionCall(const FunctionNode* callee,
+                                                     const CallNode* caller) {
+        const auto pattern_name = callee->GetAttr<runtime::String>(attr::kComposite);
+        CHECK(pattern_name.defined()) << "Only functions with composite attribute supported";
 
-       const auto op_name = GetRef<Op>(op_node)->name;
-       const auto iter = op_map.find(op_name);
-       if (iter != op_map.end()) {
-         return GenerateBody(call, iter->second.first, iter->second.second(call));
-       }
+        if (pattern_name == "soma.qnn_conv2d") {
+            auto attribute_args = GetConv2dAttributes(callee);
+            return GenerateConv2dBody(callee->body.as<CallNode>(), GetArgumentNames(caller), attribute_args);
+        }
 
-       LOG(FATAL) << "Unsupported op: " << AsText(call->op, false);
-       return {};
-     }
+        LOG(FATAL) << "Unknown composite function:" << pattern_name;
+        return {};
+    }
 
-     GenerateBodyOutput GenerateCompositeFunctionCall(const FunctionNode* callee,
-                                                      const CallNode* caller) {
-       const auto pattern_name = callee->GetAttr<runtime::String>(attr::kComposite);
-       CHECK(pattern_name.defined()) << "Only functions with composite attribute supported";
+    GenerateBodyOutput GenerateConv2dBody(const CallNode* final_call,
+                                          const std::vector<std::string>& func_args,
+                                          std::map<std::string, int>& attribute_args) {
+       /*
+        * Example output:
+        *
+        * const SomaConvParams conv_params = {.activation_function = 1, shift_fixed_point = 19, .pad_up_down = 1, .pad_left_right = 1, .conv_strided = 0};
+        * const SomaDataShape input_dims = {.c = 3, .h = 10, .w = 20};
+        * const SomaFilterShape filter_dims = {.c = 3, fy = 3, fx = 3, k = 5};
+        * const SomaFilterShape output_dims = {.c = 5, .h = 10, .w = 20};
+        * return soma_conv2d_s8(&conv_params, &input_dims, input_data, &filter_dims, filter_data, 5, bias_data, &output_dims, output_data);
+        */
+        GenerateBodyOutput ret;
+        std::ostringstream decl_stream;
 
-       if (pattern_name == "soma.conv2d_bias_relu8") {
-         const auto* conv_call =
-             GetRootCall(callee->body.as<CallNode>(), 2, {"qnn.conv2d", "qnn.add", "qnn.relu"});
-         return GenerateBody(conv_call, "soma_fused_conv2d_bias_relu8", GetArgumentNames(caller),
-                             Conv2d(conv_call));
-       } else if (pattern_name == "soma.conv2d_relu8") {
-         const auto* conv_call = GetRootCall(callee->body.as<CallNode>(), 1, {"qnn.conv2d", "qnn.relu"});
-         return GenerateBody(conv_call, "soma_fused_conv2d_relu8", GetArgumentNames(caller),
-                             Conv2d(conv_call));
-       }
+        // define conv_params
+        decl_stream << "const SomaConvParams conv_params = {" \
+                    << ".activation_function = " << attribute_args["activation_function"] << ", " \
+                    << ".shift_fixed_point = " << attribute_args["shift_fixed_point"] << ", " \
+                    << ".pad_up_down = " << attribute_args["pad_up_down"] << ", " \
+                    << ".pad_left_right = " << attribute_args["pad_left_right"] << ", " \
+                    << ".conv_strided = " << attribute_args["conv_strided"] << "};";
+        ret.decl.push_back(decl_stream.str());
+        decl_stream.str(std::string());
 
-       LOG(FATAL) << "Unknown composite function:" << pattern_name;
-       return {};
-     }
+        // define input_dims
+        decl_stream << "const SomaDataShape input_dims = {" \
+                    << ".c = " << attribute_args["input_dims_c"] << ", " \
+                    << ".h = " << attribute_args["input_dims_h"] << ", " \
+                    << ".w = " << attribute_args["input_dims_w"] << "};";
+        ret.decl.push_back(decl_stream.str());
+        decl_stream.str(std::string());
 
-     GenerateBodyOutput GenerateBody(const CallNode* root_call, const std::string& func_name,
-                                     const std::vector<std::string>& attribute_args) {
-       return GenerateBody(root_call, func_name, GetArgumentNames(root_call), attribute_args);
-     }
+        // define filter_dims
+        decl_stream << "const SomaFilterShape filter_dims = {" \
+                    << ".c = " << attribute_args["filter_dims_c"] << ", " \
+                    << ".fy = " << attribute_args["filter_dims_fy"] << ", " \
+                    << ".fx = " << attribute_args["filter_dims_fx"] << ", " \
+                    << ".k = " << attribute_args["filter_dims_k"] << "};";
+        ret.decl.push_back(decl_stream.str());
+        decl_stream.str(std::string());
 
-     GenerateBodyOutput GenerateBody(const CallNode* root_call, const std::string& func_name,
-                                     const std::vector<std::string>& func_args,
-                                     const std::vector<std::string>& attribute_args) {
-       // Make function call with input buffers when visiting arguments
-       CHECK_GT(func_args.size(), 0);
-       std::ostringstream decl_stream;
-       decl_stream << "(" << func_args[0];
-       for (size_t i = 1; i < func_args.size(); ++i) {
-         decl_stream << ", " << func_args[i];
-       }
+        // define output_dims
+        decl_stream << "const SomaDataShape output_dims = {" \
+                    << ".c = " << attribute_args["output_dims_c"] << ", " \
+                    << ".h = " << attribute_args["output_dims_h"] << ", " \
+                    << ".w = " << attribute_args["output_dims_w"] << "};";
+        ret.decl.push_back(decl_stream.str());
+        decl_stream.str(std::string());
 
-       // Analyze the output buffers
-       std::vector<Type> out_types;
-       if (root_call->checked_type()->IsInstance<TupleTypeNode>()) {
-         auto type_node = root_call->checked_type().as<TupleTypeNode>();
-         for (auto field : type_node->fields) {
-           CHECK(field->IsInstance<TensorTypeNode>());
-           out_types.push_back(field);
-         }
-       } else if (root_call->checked_type()->IsInstance<TensorTypeNode>()) {
-         CHECK(root_call->checked_type()->IsInstance<TensorTypeNode>());
-         out_types.push_back(root_call->checked_type());
-       } else {
-         LOG(FATAL) << "Unrecognized type node: " << AsText(root_call->checked_type(), false);
-       }
+        // make function call
+        decl_stream << "return soma_conv2d_s8(&conv_params, &input_dims, " \
+                    << func_args[0] << ", &filter_dims, " \
+                    << func_args[1] << ", " \
+                    << attribute_args["filter_dims_k"] << ", " \
+                    << func_args[2] << ", &output_dims, " << "out0" << ");";
+        ret.decl.push_back(decl_stream.str());
+        decl_stream.str(std::string());
 
-       GenerateBodyOutput ret;
-       for (const auto& out_type : out_types) {
-         this->PrintIndents();
-         const std::string out = "buf_" + std::to_string(buf_idx_++);
-         const auto out_size = GetShape1DSize(out_type);
-         decl_stream << ", " << out;
+        // set output buffer type
+        auto out_type = final_call->checked_type();
+        Output output;
+        output.name = "out0";
+        output.size = GetShape1DSize(out_type);
+        output.dtype = GetDtypeString(out_type.as<TensorTypeNode>());
+        output.need_copy = false;
+        ret.outputs.push_back(output);
 
-         Output output;
-         output.name = out;
-         output.size = out_size;
-         output.dtype = GetDtypeString(out_type.as<TensorTypeNode>());
-         output.need_copy = true;
-	 // TODO hardcoded to int8_t; if type changes from bit, malloc has to be adapted
-         ret.buffers.push_back("int8_t* " + out + " = (int8_t *) malloc(" +
-                               std::to_string(out_size) + ");");
-         ret.outputs.push_back(output);
-       }
-
-       // Attach attribute arguments
-       for (size_t i = 0; i < attribute_args.size(); ++i) {
-         decl_stream << ", " << attribute_args[i];
-       }
-       decl_stream << ");";
-       ret.decl = func_name + decl_stream.str();
-       return ret;
-     }
+        return ret;
+    }
 
     /*! \brief The id of the external soma ext_func. */
     std::string ext_func_id_{""};
@@ -502,10 +506,11 @@ class SOMAModuleCodegen : public CSourceModuleCodegenBase {
       Array<String> syms = {sym};
 
       // Create a CSource module with all above artifacts.
-      const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
-      CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
-      auto ret = (*pf)(code, "c", syms, variables);
-      return ret;
+      //const auto* pf = runtime::Registry::Get("runtime.CSourceModuleCreate");
+      //CHECK(pf != nullptr) << "Cannot find csource module to create the external runtime module";
+      //auto ret = (*pf)(code, "c", syms, variables);
+      //return ret;
+      return codegen::CSourceModuleCreate(code, "c", syms);
     }
 
   private:

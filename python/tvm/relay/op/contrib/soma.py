@@ -8,11 +8,12 @@ from tvm._ffi import register_func
 from tvm.relay.expr import const
 from tvm.relay import transform
 from tvm.relay.build_module import bind_params_by_name
-from tvm.relay.testing.temp_op_attr import TempOpAttr
 #from tvm.driver.tvmc import TVMCException
 
 from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 from .register import register_pattern_table
+
+tvm._ffi._init_api("relay.ext.cmsisnn.transform", __name__)
 
 
 def _register_external_op_helper(op_name, supported=True):
@@ -42,28 +43,6 @@ _register_external_op_helper("qnn.conv2d")
 _register_external_op_helper("nn.relu")
 _register_external_op_helper("qnn.relu")
 
-def make_pattern(with_bias=True):
-    """
-    Helper function to register a pattern to recognize Conv + EWS + ReLU as a single operation.
-    (Taken from DNNL example.)
-    Parameters
-    ----------
-    with_bias : Whether or not to include bias
-
-    Returns
-    -------
-        The created pattern from the pattern matching engine.
-    """
-    data = wildcard()
-    weight = wildcard()
-    bias = wildcard()
-    conv = is_op("nn.conv2d")(data, weight)
-    if with_bias:
-        conv_out = is_op("add")(conv, bias)
-    else:
-        conv_out = conv
-    return is_op("nn.relu")(conv_out)
-
 
 @register_pattern_table("soma")
 def pattern_table():
@@ -73,11 +52,27 @@ def pattern_table():
     -------
         The patterns.
     """
-    # TODO: Register other operations
-    conv2d_bias_relu_pat = ("soma.conv2d_bias_relu8", make_pattern(with_bias=True))
-    conv2d_relu_pat = ("soma.conv2d_relu8", make_pattern(with_bias=False))
-    soma_patterns = [conv2d_bias_relu_pat, conv2d_relu_pat]
-    return soma_patterns
+    def qnn_conv2d_pattern():
+        """Create pattern for qnn.conv2D with optional fused relu."""
+        qnn_conv2d = is_op("qnn.conv2d")(
+            wildcard(), wildcard(), is_constant(), is_constant(), is_constant(), is_constant()
+        )
+        bias_add = is_op("nn.bias_add")(qnn_conv2d, wildcard())
+        req = is_op("qnn.requantize")(
+            qnn_conv2d | bias_add, is_constant(), is_constant(), is_constant(), is_constant()
+        )
+        clip_or_req = req.optional(is_op("clip"))
+        return clip_or_req
+
+    def check_qnn_conv2d(pattern):
+        """Check if the Conv2D is supported by CMSIS-NN."""
+
+        # just pretend that it is always supported for now
+        return (True)
+
+    return [
+        ("soma.qnn_conv2d", qnn_conv2d_pattern(), check_qnn_conv2d),
+    ]
 
 
 def partition_for_soma(mod, params=None, dpu=None, **opts):
@@ -92,19 +87,36 @@ def partition_for_soma(mod, params=None, dpu=None, **opts):
     The partitioned module.
 
     """
-    # Convert the layout of the graph where possible.
-    seq = tvm.transform.Sequential(
-        [
-            transform.AnnotateTarget(["soma"]),
-            transform.MergeCompilerRegions(),
-            transform.PartitionGraph(),
+    print('Before transform -----')
+    print(mod)
 
-        ]
-    )
+    mod = transform.InferType()(mod)
+    print('transform.InferType() -----')
+    print(mod)
+
+    mod = transform.MergeComposite(pattern_table())(mod)
+    print('transform.MergeComposite(pattern_table()) -----')
+    print(mod)
+
+    mod = transform.AnnotateTarget(["soma"])(mod)
+    print('transform.AnnotateTarget(["soma"]) -----')
+    print(mod)
+
+    #mod = transform.MergeCompilerRegions()(mod)
+    #print('transform.MergeCompilerRegions() -----')
+    #print(mod)
+
+    mod = transform.PartitionGraph()(mod)
+    print('transform.PartitionGraph() -----')
+    print(mod)
+
+    mod = transform.InferType()(mod)
+    print('transform.InferType() -----')
+    print(mod)
 
     with tvm.transform.PassContext(opt_level=3):
         try:
-            return seq(mod)
+            return mod
         except Exception as err:
             raise Exception(
                 "Error converting layout to {0}".format(str(err))
