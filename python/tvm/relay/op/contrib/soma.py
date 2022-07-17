@@ -3,6 +3,9 @@ Operations to support the SOMA accelerator.
 """
 
 import tvm
+from tvm import relay
+
+from ...expr_functor import ExprMutator
 
 from tvm._ffi import register_func
 from tvm.relay.expr import const
@@ -14,6 +17,103 @@ from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 from .register import register_pattern_table
 
 tvm._ffi._init_api("relay.ext.cmsisnn.transform", __name__)
+
+
+@transform.function_pass(opt_level=0)
+class SomaGraphQuantizer(ExprMutator):
+    """Convert fake-quantized relay graph (from Soma ONNX file) into a real quantized relay graph
+    """
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        super().__init__()
+
+    def transform_function(self, func, mod, ctx):
+        return self.visit(func)
+
+    def visit_call(self, call):
+        """Rewrite ops
+        """
+        new_fn = self.visit(call.op)
+        new_args = [self.visit(arg) for arg in call.args]
+
+        if call.op.name == 'nn.conv2d':
+            # replace nn.conv2d with qnn.conv2d
+            # TODO: add assertion on weights to be a variable
+            w_shape = new_args[1].type_annotation.shape
+            new_call = relay.qnn.op.conv2d(new_args[0], new_args[1],
+                                           relay.const(0),
+                                           relay.const(0),
+                                           relay.const(1.0),
+                                           relay.const(1.0),
+                                           w_shape[-2:],
+                                           channels=w_shape[0],
+                                           strides=call.attrs.strides,
+                                           padding=call.attrs.padding,
+                                           dilation=call.attrs.dilation,
+                                           groups=call.attrs.groups)
+
+        elif call.op.name == 'divide':
+            # We currently assume that a divide op represents a requant operations after bias_add or element-wise sum
+            new_call = relay.qnn.op.requantize(new_args[0],
+                                               relay.const(1.0),
+                                               relay.const(0),
+                                               new_args[1],
+                                               relay.const(0),
+                                               axis=1,
+                                               out_dtype=self.dtype)
+        else:
+            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
+
+        return new_call
+
+    def visit_function(self, fn):
+        """Rewrite function arguments
+        """
+        new_params = []
+        binds = {}
+
+        for param in fn.params:
+            # Get the parameter's type annotation.
+            var_type = param.type_annotation
+
+            # bias params are int32
+            if param.name_hint.endswith('bias'):
+                dtype = 'int32'
+            else:
+                dtype = self.dtype
+
+            # Generate new variable.
+            new_param = relay.var(param.name_hint, shape=var_type.shape, dtype=dtype)
+
+            new_params.append(new_param)
+            binds[param] = new_param
+
+        new_body = self.visit(fn.body)
+        # Rewrite the body to use new parameters.
+        new_body = relay.bind(new_body, binds)
+
+        # Construct the updated function and return.
+        return relay.Function(
+            new_params,
+            new_body,
+            # You could change the return type, if you use None it will re-infer.
+            None,
+            type_params=fn.type_params,
+            attrs=fn.attrs,
+        )
+
+
+def soma_params_quantizer(params, dtype):
+    """Convert a fake-quantized relay graph, read from soma onnx, into a real quantized relay graph
+    """
+    for k, v in params.items():
+        if k.endswith('bias'):
+            params[k] = tvm.nd.array(v.asnumpy().astype('int32'))
+        else:
+            params[k] = tvm.nd.array(v.asnumpy().astype(dtype))
+
+    return params
 
 
 def _register_external_op_helper(op_name, supported=True):
@@ -87,7 +187,14 @@ def partition_for_soma(mod, params=None, dpu=None, **opts):
     The partitioned module.
 
     """
+    if params:
+        params = soma_params_quantizer(params, 'int8')
+
     print('Before transform -----')
+    print(mod)
+
+    mod = SomaGraphQuantizer('int8')(mod)
+    print('SomaGraphMutator() -----')
     print(mod)
 
     mod = transform.InferType()(mod)
