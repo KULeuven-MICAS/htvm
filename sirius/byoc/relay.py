@@ -33,21 +33,21 @@ def create_int8_conv_bias_act(x, name, weights_shape, act=False):
 
 
 def create_model():
-    input_shape = (1, 3, 10, 20)
+    input_shape = (1, 3, 32, 32)
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
-    weights_shape = (5, 3, 3, 3)
+    weights_shape = (16, 3, 3, 3)
     x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, act=True)
 
-    weights_shape = (8, 5, 3, 3)
-    x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, act=True)
+    #weights_shape = (32, 16, 3, 3)
+    #x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, act=True)
 
-    weights_shape = (1, 8, 3, 3)
-    x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, act=False)
+    #weights_shape = (16, 32, 3, 3)
+    #x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, act=True)
 
     # combine all params
-    params1.update(params2)
-    params1.update(params3)
+    #params1.update(params2)
+    #params1.update(params3)
     params = params1
 
     # create an IR module from the relay expression
@@ -70,6 +70,6 @@ compile_model(tvmc_model=model,
                                 ),
               runtime=Runtime("crt"),
               output_format="mlf",
-              package_path="./build_soma/model.tar",
+              package_path="./build/model.tar",
               pass_context_configs=['tir.disable_vectorize=1']
             )

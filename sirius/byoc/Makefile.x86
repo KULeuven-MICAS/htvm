@@ -4,7 +4,7 @@ MODEL := model
 PYTHON := python3
 
 # Compiler options
-PKG_COMPILE_OPTS = -Wall -pedantic -O0 -std=gnu99
+PKG_COMPILE_OPTS = -Wall -O0 -std=gnu99
 PULP_COMPILE_OPTS = -DSDK -m32 -DX86_SOMA
 # For debug support - comment these out for reduced binary size
 PKG_COMPILE_OPTS += -g
@@ -18,7 +18,7 @@ CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
-SOMA_LIB_PATH = $(abspath $(BUILD_DIR))/sirius-high-level-library
+SOMA_LIB_PATH = $(abspath include/sirius-high-level-library)
 SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
 SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
 
@@ -60,20 +60,15 @@ $(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)
 
 
 compile:clean
-	# Create model.tar for int8 sum
-	$(PYTHON) soma_codegen.py
 	# Create build directory and move and unpack model mlf there
 	mkdir -p $(BUILD_DIR)
-	mv $(MODEL).tar $(BUILD_DIR)
+	# Create model.tar 
+	$(PYTHON) relay.py
 	tar -xf $(BUILD_DIR)/$(MODEL).tar --directory=$(BUILD_DIR)
 	rm $(BUILD_DIR)/$(MODEL).tar
-	# Re-evaluate the codegen sources after creating the files
-	#$(eval $(call RE_EVALUATE,${BUILD_DIR/codegen/host/src/*.c}))
-	#echo $(CODEGEN_SRCS)
-	#echo $(CODEGEN_OBJS)
-
 
 clean:
 	rm -rf $(BUILD_DIR) 
+	rm -f $(SOMA_OBJS)
 
 
