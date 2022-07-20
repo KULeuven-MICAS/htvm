@@ -34,12 +34,13 @@ void __attribute__((noreturn)) TVMPlatformAbort(tvm_crt_error_t error_code) {
 }
 
 void* TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
-  out_ptr = malloc(num_bytes);
+  *out_ptr = malloc(num_bytes);
   return 0;
 }
 
-void TVMPlatformMemoryFree(void* ptr, DLDevice dev) {
-  return free(ptr);
+int TVMPlatformMemoryFree(void* ptr, DLDevice dev) {
+  free(ptr);
+  return 0;
 }
 
 void TVMLogf(const char* msg, ...) {
