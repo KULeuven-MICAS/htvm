@@ -39,15 +39,15 @@ def create_model():
     weights_shape = (16, 3, 3, 3)
     x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, act=True)
 
-    #weights_shape = (32, 16, 3, 3)
-    #x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, act=True)
+    weights_shape = (32, 16, 3, 3)
+    x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, act=True)
 
-    #weights_shape = (16, 32, 3, 3)
-    #x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, act=True)
+    weights_shape = (16, 32, 3, 3)
+    x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, act=True)
 
     # combine all params
-    #params1.update(params2)
-    #params1.update(params3)
+    params1.update(params2)
+    params1.update(params3)
     params = params1
 
     # create an IR module from the relay expression

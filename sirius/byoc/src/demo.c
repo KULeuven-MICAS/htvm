@@ -15,8 +15,10 @@ int main(int argc, char** argv) {
 	tvm_workspace_t app_workspace;
 	static uint8_t g_aot_memory[TVMGEN_DEFAULT_WORKSPACE_SIZE];
 	StackMemoryManager_Init(&app_workspace, g_aot_memory, TVMGEN_DEFAULT_WORKSPACE_SIZE);
-    int8_t *input = malloc(1 * 3 * 16 * 16 * sizeof(int8_t));
-    int8_t *output = malloc(1 * 16 * 32 * 32 * sizeof(int8_t));
+    uint32_t input_size = 1 * 3 * 16 * 16;
+    uint32_t output_size = 1 * 16 * 32 * 32;
+    int8_t *input = malloc(input_size * sizeof(int8_t));
+    int8_t *output = malloc(output_size * sizeof(int8_t));
 
 	//printf("Assigning test inputs\n");
     struct tvmgen_default_outputs outputs = {
@@ -28,6 +30,8 @@ int main(int argc, char** argv) {
 
 	//printf("Running inference\n");
 	int32_t status = tvmgen_default_run(&inputs, &outputs);
+    free(input);
+    free(output);
     if(status != 0){
         abort();
     }
