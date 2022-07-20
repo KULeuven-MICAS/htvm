@@ -33,7 +33,8 @@ INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
 PULP_APP = demo
 PULP_APP_SRCS = $(SOMA_SRCS) $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(abspath src/demo.c) 
 PULP_INC_PATHS += -DSDK
-PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS)
+# Use -DNDEBUG to remove assertions in TVM runtime
+PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS) -DNDEBUG
 # Uncomment to trigger the auto debugging in the hardware library.
 #PULP_CFLAGS += -DSOMA_AUTO_DEBUG
 # Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
