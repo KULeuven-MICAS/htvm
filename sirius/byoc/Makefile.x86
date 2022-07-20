@@ -4,7 +4,7 @@ MODEL := model
 PYTHON := python3
 
 # Compiler options
-PKG_COMPILE_OPTS = -Wall -O0 -std=gnu99
+PKG_COMPILE_OPTS = -Wall -O0 -std=gnu99 #-fsanitize=address
 PULP_COMPILE_OPTS = -DSDK -m32 -DX86_SOMA
 # For debug support - comment these out for reduced binary size
 PKG_COMPILE_OPTS += -g
