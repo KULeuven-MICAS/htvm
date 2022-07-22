@@ -1,3 +1,4 @@
+from utils import tvmc_compile_and_unpack
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -41,15 +42,15 @@ def create_model():
     weights_shape = (16, 3, 3, 3)
     x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, act=True)
 
-    #weights_shape = (32, 16, 3, 3)
-    #x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, act=True)
+    weights_shape = (32, 16, 3, 3)
+    x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, act=True)
 
-    #weights_shape = (16, 32, 3, 3)
-    #x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, act=True)
+    weights_shape = (16, 32, 3, 3)
+    x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, act=True)
 
     # combine all params
-    #params1.update(params2)
-    #params1.update(params3)
+    params1.update(params2)
+    params1.update(params3)
     params = params1
 
     # create an IR module from the relay expression
@@ -58,21 +59,9 @@ def create_model():
 
     return mod, params
 
-
 # create the model
 mod, params = create_model()
 
 # compile the model
 model = TVMCModel(mod, params)
-compile_model(tvmc_model=model,
-              target="c",
-              executor=Executor("aot",
-                                {"interface-api": "c",
-                                 "unpacked-api": 1}
-                                ),
-              runtime=Runtime("crt"),
-              output_format="mlf",
-              package_path="./build/model.tar",
-              pass_context_configs=[#'relay.FuseOps.max_depth=1',
-                                    'tir.disable_vectorize=1']
-              )
+tvmc_compile_and_unpack(model, target="soma, c")

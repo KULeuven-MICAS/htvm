@@ -37,9 +37,9 @@ PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
              -I${SOMA_LIB_PATH}/include
 
 # These targets don't make self-titled files
-.PHONY: all compile clean
+.PHONY: all clean
 
-all: compile $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/libcodegen.a $(BUILD_DIR)/demo
+all: $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/libcodegen.a $(BUILD_DIR)/demo
 
 $(BUILD_DIR)/stack_allocator.o: $(STANDALONE_CRT_PATH)/src/runtime/crt/memory/stack_allocator.c
 	mkdir -p $(@D)
@@ -58,17 +58,7 @@ $(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)
 	mkdir -p $(@D)
 	$(CC) $(PKG_CFLAGS) -o  $@ $^
 
-
-compile:clean
-	# Create build directory and move and unpack model mlf there
-	mkdir -p $(BUILD_DIR)
-	# Create model.tar 
-	$(PYTHON) relay.py
-	tar -xf $(BUILD_DIR)/$(MODEL).tar --directory=$(BUILD_DIR)
-	rm $(BUILD_DIR)/$(MODEL).tar
-
 clean:
-	rm -rf $(BUILD_DIR) 
 	rm -f $(SOMA_OBJS)
 
 
