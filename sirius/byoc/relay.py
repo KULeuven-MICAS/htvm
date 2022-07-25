@@ -27,13 +27,14 @@ def create_int8_conv_bias_act(x, name, weights_shape, act=False, shift_bits=0):
     x = relay.qnn.op.conv2d(x, w, relay.const(0), relay.const(0), relay.const(1.0), relay.const(1.0), weights_shape[-2:], channels=conv_channels, padding=(1, 1))
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits)) 
+    x = relay.op.clip(x, a_min=-128, a_max=127)
     x = relay.op.cast(x, 'int8')
     #x = relay.qnn.op.requantize(x, relay.const(1.0), relay.const(0), relay.const(float(2**shift_bits)), relay.const(0), axis=1, out_dtype='int8')
     # the fourth param of requantize contains the power-of-two division factor. All other constants will be ignored by soma codegen
 
 
     if act:
-        x = relay.op.clip(x, a_min=-128, a_max=127)
+        x = relay.op.clip(x, a_min=0, a_max=127)
 
     return x, params
 
@@ -43,7 +44,7 @@ def create_model():
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     weights_shape = (16, 3, 3, 3)
-    x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, True, 2)
+    x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, False, 2)
 
     #weights_shape = (32, 16, 3, 3)
     #x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, True, 4)

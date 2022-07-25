@@ -159,10 +159,14 @@ def pattern_table():
             is_constant(), is_constant()
         )
         bias_add = is_op("nn.bias_add")(qnn_conv2d, wildcard())
-        right_shift = is_op("right_shift")(bias_add, is_constant())
-        cast = is_op("cast")(right_shift).has_attr({"dtype": "int8"})
-        clip_or_cast = cast.optional(is_op("clip"))
-        return clip_or_cast
+        right_shift = is_op("right_shift")(bias_add,
+                                           is_constant())
+        # TODO: figure out how to match on attributes for clip?
+        clip = is_op("clip")(right_shift)
+        cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
+        # optionally have extra clip/ReLU
+        act_or_cast = cast.optional(lambda x: is_op("clip")(x))
+        return act_or_cast
 
     def check_qnn_conv2d(pattern):
         """Check if the Conv2D is supported by CMSIS-NN."""
