@@ -40,14 +40,14 @@ std::map<std::string, int> GetConv2dAttributes(const FunctionNode* func_call) {
 
     const auto* final_call = func_call->body.as<CallNode>();
     const auto* conv_call = GetRootCall(func_call->body.as<CallNode>(), "qnn.conv2d");
-    const auto* requant_call = GetRootCall(func_call->body.as<CallNode>(), "qnn.requantize");
+    const auto* shift_call = GetRootCall(func_call->body.as<CallNode>(), "right_shift");
 
     const auto* conv2d_attr = conv_call->attrs.as<Conv2DAttrs>();
     CHECK(conv2d_attr);
 
     auto ishape = GetShape(conv_call->args[0]->checked_type());
     auto wshape = GetShape(conv_call->args[1]->checked_type());
-    auto oshape = GetShape(requant_call->args[0]->checked_type());  // output shape of conv2d is input shape of requant op
+    auto oshape = GetShape(shift_call->args[0]->checked_type());  // output shape of conv2d is input shape of shift op
 
     // get conv_params (assume the ranges are already checked)
     args.insert({"pad_up_down", conv2d_attr->padding[0].as<IntImmNode>()->value});
@@ -62,8 +62,7 @@ std::map<std::string, int> GetConv2dAttributes(const FunctionNode* func_call) {
         args.insert({"activation_function", 1});
     }
 
-    float div =  GetScalarFromConstant<float>(requant_call->args[3]);
-    int right_shift = std::log2(div);
+    int right_shift =  GetScalarFromConstant<int>(shift_call->args[1]);
     args.insert({"shift_fixed_point", right_shift});
 
     // get input_dims
