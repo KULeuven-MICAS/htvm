@@ -26,9 +26,9 @@ def create_int8_conv_bias_act(x, name, weights_shape, act=False, shift_bits=0):
     # define ops
     x = relay.qnn.op.conv2d(x, w, relay.const(0), relay.const(0), relay.const(1.0), relay.const(1.0), weights_shape[-2:], channels=conv_channels, padding=(1, 1))
     x = relay.op.nn.bias_add(x, b)
-    #x = relay.op.right_shift(x, relay.const(shift_bits)) 
-    #x = relay.op.cast(x, 'int8')
-    x = relay.qnn.op.requantize(x, relay.const(1.0), relay.const(0), relay.const(float(2**shift_bits)), relay.const(0), axis=1, out_dtype='int8')
+    x = relay.op.right_shift(x, relay.const(shift_bits)) 
+    x = relay.op.cast(x, 'int8')
+    #x = relay.qnn.op.requantize(x, relay.const(1.0), relay.const(0), relay.const(float(2**shift_bits)), relay.const(0), axis=1, out_dtype='int8')
     # the fourth param of requantize contains the power-of-two division factor. All other constants will be ignored by soma codegen
 
 
@@ -67,4 +67,4 @@ mod, params = create_model()
 
 # compile the model
 model = TVMCModel(mod, params)
-tvmc_compile_and_unpack(model, target="c", fuse_layers=True)
+tvmc_compile_and_unpack(model, target="soma, c", fuse_layers=True)
