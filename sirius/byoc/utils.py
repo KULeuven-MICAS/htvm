@@ -16,6 +16,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                       weights_shape: Tuple[int], 
                       w_value: npt.NDArray[np.int8],
                       b_value: npt.NDArray[np.int32],
+                      strides: Tuple[int] = (1,1),
                       act: bool = False, 
                       shift_bits: int = 0) -> Tuple[relay.Var,
                                               Dict[relay.Expr, tvm.nd.array]]:
@@ -27,6 +28,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     :param weights_shape: tuple describing shape of weight tensor
     :param w_value: numpy int8 tensor that contains weight values
     :param b_value: numpy int32 tensor that contains bias values
+    :param strides: tuple describing convolution stride (x,y)
     :param act: bool that toggles extra ReLU to be added (see below)
     :shift_bits: int that sets amount of bits to shift right
         value must be between [0,31]
@@ -62,10 +64,19 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     params = {weights_name: tvm.nd.array(w_value), 
               bias_name: tvm.nd.array(b_value)}
     # define ops for a convolution on SOMA
+    if (weights_shape[-2:] == (3,3)):
+        padding = (1,1)
+    elif (weights_shape[-2:] == (1,1)): 
+        padding = (0,0)
+    else:
+        raise ValueError("only Fx=1,Fy=1 or Fx=3,Fy=3 are supported")
+    if not ((strides == (1,1)) or (strides == (2,2))):
+        raise ValueError("only strides (1,1) and (2,2) are supported")
     x = relay.qnn.op.conv2d(input_tensor, w, relay.const(0), relay.const(0),
                             relay.const(1.0), relay.const(1.0), 
                             weights_shape[-2:], channels=conv_channels, 
-                            padding=(1, 1))
+                            strides=strides,
+                            padding=padding)
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits)) 
     x = relay.op.clip(x, a_min=-128, a_max=127)

@@ -16,19 +16,20 @@ def create_model():
     x, params1 = relay_soma_conv2d(x, 'conv1', weights_shape, 
                                    np.ones(weights_shape).astype(np.int8), 
                                    np.ones(weights_shape[0]).astype(np.int32), 
-                                   False, 4)
+                                   act=False, shift_bits=4)
     weights_shape = (32, 16, 3, 3)
     x, params2 = relay_soma_conv2d(x, 'conv2', weights_shape,
                                    np.ones(weights_shape).astype(np.int8), 
                                    np.ones(weights_shape[0]).astype(np.int32), 
-                                   True, 5)
+                                   act=True, shift_bits=5)
     weights_shape = (16, 32, 3, 3)
     x, params3 = relay_soma_conv2d(x, 'conv3', weights_shape,
                                    np.ones(weights_shape).astype(np.int8),
                                    np.ones(weights_shape[0]).astype(np.int32),
-                                   True, 5)
+                                   strides=(2,2),
+                                   act=True, shift_bits=5)
 
-    y_shape = (1, 16, 32, 32)
+    y_shape = (1, 16, 16, 16)
     y_name = "input_y"
     y = relay.var(y_name, relay.TensorType(y_shape, 'int8'))
     y_value = np.ones(y_shape).astype(np.int8)
@@ -54,4 +55,4 @@ if __name__ == "__main__":
     mod, params = create_model()
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target="c", fuse_layers=True)
+    tvmc_compile_and_unpack(model, target="soma, c", fuse_layers=True)
