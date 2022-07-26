@@ -116,32 +116,32 @@ def soma_params_quantizer(params, dtype):
     return params
 
 
-def _register_external_op_helper(op_name, supported=True):
-    """
-    Easily register SOMA supported operations.
-
-    Parameters
-    ----------
-    op_name : str
-        Name of the operator.
-    supported : bool
-        Whether the operator is supported
-
-    Returns
-    -------
-        The wrapped function to enable support for the operator.
-    """
-    @tvm.ir.register_op_attr(op_name, "target.soma")
-    def _func_wrapper(attrs):#, args):
-        return supported
-    return _func_wrapper
-
-_register_external_op_helper("add")
-_register_external_op_helper("nn.bias_add")
-_register_external_op_helper("nn.conv2d")
-_register_external_op_helper("qnn.conv2d")
-_register_external_op_helper("nn.relu")
-_register_external_op_helper("qnn.relu")
+#def _register_external_op_helper(op_name, supported=True):
+#    """
+#    Easily register SOMA supported operations.
+#
+#    Parameters
+#    ----------
+#    op_name : str
+#        Name of the operator.
+#    supported : bool
+#        Whether the operator is supported
+#
+#    Returns
+#    -------
+#        The wrapped function to enable support for the operator.
+#    """
+#    @tvm.ir.register_op_attr(op_name, "target.soma")
+#    def _func_wrapper(attrs):#, args):
+#        return supported
+#    return _func_wrapper
+#
+#_register_external_op_helper("add")
+#_register_external_op_helper("nn.bias_add")
+#_register_external_op_helper("nn.conv2d")
+#_register_external_op_helper("qnn.conv2d")
+#_register_external_op_helper("nn.relu")
+#_register_external_op_helper("qnn.relu")
 
 
 @register_pattern_table("soma")

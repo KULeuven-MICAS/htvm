@@ -44,17 +44,26 @@ def create_model():
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     weights_shape = (16, 3, 3, 3)
-    x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, False, 2)
+    x, params1 = create_int8_conv_bias_act(x, 'conv1', weights_shape, False, 4)
 
-    #weights_shape = (32, 16, 3, 3)
-    #x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, True, 4)
+    weights_shape = (32, 16, 3, 3)
+    x, params2 = create_int8_conv_bias_act(x, 'conv2', weights_shape, True, 5)
 
-    #weights_shape = (16, 32, 3, 3)
-    #x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, True, 4)
+    weights_shape = (16, 32, 3, 3)
+    x, params3 = create_int8_conv_bias_act(x, 'conv3', weights_shape, True, 5)
+
+    y_shape = (1, 16, 32, 32)
+    y_name = "input_y"
+    y = relay.var(y_name, relay.TensorType(y_shape, 'int8'))
+    y_value = np.ones(y_shape).astype(np.int8)
+    y_param = {y_name: tvm.nd.array(y_value)} 
+
+    x = relay.add(x, y)
 
     # combine all params
-    #params1.update(params2)
-    #params1.update(params3)
+    params1.update(params2)
+    params1.update(params3)
+    params1.update(y_param)
     params = params1
 
     # create an IR module from the relay expression
