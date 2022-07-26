@@ -2,17 +2,91 @@ import pathlib
 import tarfile
 import shutil
 import os
+import tvm
+import tvm.relay as relay
+import numpy as np
 from tvm.driver.tvmc.compiler import compile_model
+from tvm.driver.tvmc.model import TVMCModel
 from tvm.relay.backend import Executor, Runtime
 
+from typing import Tuple, Dict
+import numpy.typing as npt
+
+def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str, 
+                      weights_shape: Tuple[int], 
+                      w_value: npt.NDArray[np.int8],
+                      b_value: npt.NDArray[np.int32],
+                      act: bool = False, 
+                      shift_bits: int = 0) -> Tuple[relay.Var,
+                                              Dict[relay.Expr, tvm.nd.array]]:
+    '''
+    Creates a relay conv2d graph which is SOMA compatible
+    This means it can be offloaded to the accelerator.
+    :param input_tensor: relay.Var for input
+    :param layer_name: string that determines relay variable naming
+    :param weights_shape: tuple describing shape of weight tensor
+    :param w_value: numpy int8 tensor that contains weight values
+    :param b_value: numpy int32 tensor that contains bias values
+    :param act: bool that toggles extra ReLU to be added (see below)
+    :shift_bits: int that sets amount of bits to shift right
+        value must be between [0,31]
+    :return: tuple that contains relay param dictionary and relay
+        expr for the subgraph.
+
+    The Relay code for one of these layers looks like this:
+    ```
+        %0 = qnn.conv2d(%input, %conv1.weights,...,out_dtype="int32");
+        %1 = nn.bias_add(%0, %conv1.bias);
+        %2 = right_shift(%1, 4);
+        %3 = clip(%2, a_min=-128f, a_max=127f);
+        %4 = cast(%3, dtype="int8");
+    ```
+    If `act` is set to `True` an additional ReLU-like clip is added
+    ```
+        %5 = clip(%4, a_min=0f, a_max=127f);
+    ```
+    NOTE: The shape of the bias is hardcoded to use the first dimension
+    of the weights_shape
+
+    This function returns the relay expression for this graph,
+    along with a parameter dictionary
+    '''
+    # define weights and bias variables
+    weights_name = layer_name + '.weights'
+    bias_name = layer_name + '.bias'
+    conv_channels = weights_shape[0]
+    # define relay input vars
+    w = relay.var(weights_name, relay.TensorType(weights_shape, 'int8'))
+    b = relay.var(bias_name, relay.TensorType((conv_channels,), 'int32'))
+    # define weights and bias values in params
+    params = {weights_name: tvm.nd.array(w_value), 
+              bias_name: tvm.nd.array(b_value)}
+    # define ops for a convolution on SOMA
+    x = relay.qnn.op.conv2d(input_tensor, w, relay.const(0), relay.const(0),
+                            relay.const(1.0), relay.const(1.0), 
+                            weights_shape[-2:], channels=conv_channels, 
+                            padding=(1, 1))
+    x = relay.op.nn.bias_add(x, b)
+    x = relay.op.right_shift(x, relay.const(shift_bits)) 
+    x = relay.op.clip(x, a_min=-128, a_max=127)
+    x = relay.op.cast(x, 'int8')
+    # Optional: ReLU
+    if act:
+        x = relay.op.clip(x, a_min=0, a_max=127)
+
+    return x, params
 
 
-def tvmc_wrapper(model, target="soma, c", fuse_layers=True):
+def tvmc_wrapper(model: TVMCModel, target: str = "soma, c", 
+                 fuse_layers: bool = True):
     ''' 
     Utility wrapper for TVMC that sets supported
     :param model: TVMC model that you wish to compile
-    :param target: Can be "soma, c" if you want to offload all possible computations 
-                   to accelerator, and can be "c" for golden model checking.
+    :param target: Can be "soma, c" if you want to offload all possible 
+        computations to accelerator, and can be "c" for golden model checking.
+    :param fuse_layers: sets relay.FuseOps.max_depth parameter to 1 
+        if set to False. This tells relay to not fuse operations.
+        This can be useful when debuggin the TVM-generated c code kernels.
     '''
     # Check arguments
     assert((target == "soma, c") or (target == "c"))
@@ -31,10 +105,20 @@ def tvmc_wrapper(model, target="soma, c", fuse_layers=True):
                   package_path="./build/model.tar",
                   pass_context_configs=pass_context_configs,
                   )
-    return
             
-def tvmc_compile_and_unpack(model, target="soma, c", 
-        fuse_layers=True, build_path="./build"):
+def tvmc_compile_and_unpack(model: TVMCModel, target: str ="soma, c",
+        fuse_layers: bool = True, build_path: str = "./build"):
+    '''
+    Utility function that calls tvmc_wrapper and extracts output mlf 
+    (= TVM model library format) file.
+    :param model: TVMC model that you wish to compile
+    :param target: Can be "soma, c" if you want to offload all possible 
+        computations to accelerator, and can be "c" for golden model checking.
+    :param fuse_layers: sets relay.FuseOps.max_depth parameter to 1 
+        if set to False. This tells relay to not fuse operations.
+        This can be useful when debuggin the TVM-generated c code kernels.
+    :param build_path: path to export mlf file output to
+    '''
     # check if build folder exists
     path = pathlib.Path(build_path)
     if(path.is_dir()):
@@ -50,4 +134,3 @@ def tvmc_compile_and_unpack(model, target="soma, c",
     mlf.extractall(path)
     # remove the archive
     os.remove(mlf_path)
-
