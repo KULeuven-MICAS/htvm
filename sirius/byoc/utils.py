@@ -145,3 +145,74 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str ="soma, c",
     mlf.extractall(path)
     # remove the archive
     os.remove(mlf_path)
+
+def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c"):
+    '''
+    Function that creates a demo file in which inputs and outputs of the 
+    right size are allocated and setup automatically. Based on:
+
+    https://discuss.tvm.apache.org/t/
+    how-to-get-the-input-and-output-of-relay-call-node/8743
+    '''
+    # Before you can get the input and output types of a relay node
+    # you first have to run the InferType Relay pass
+    # otherwise checked_type will return a ValueError
+    print("Creating demo file: Inferring shapes and types...")
+    mod = relay.transform.InferType()(mod)
+    # Assuming the first argument is the user-supplied input
+    # Convert from TVM runtime datatype to numpy array
+    input_shape = np.array(mod["main"].checked_type.arg_types[0].shape)
+    input_dtype = mod["main"].checked_type.arg_types[0].dtype
+    # Assuming there is only output to this Relay IRMod
+    # Convert from TVM runtime datatype to numpy array
+    output_shape = np.array(mod["main"].checked_type.ret_type.shape)
+    output_dtype = mod["main"].checked_type.ret_type.dtype
+    print("Creating demo file: Inferred shapes:")
+    print(f"\tinput ({input_dtype}):")
+    print(f"\t {input_shape}")
+    print(f"\toutput ({output_dtype}):")
+    print(f"\t {output_shape}")
+
+    c_code = \
+    """
+#include <stdio.h>
+#include <stdint.h>
+#include <tvm_runtime.h>
+#include "tvmgen_default.h"
+
+int abs(int v) {return v * ((v > 0) - (v < 0)); }
+
+int main(int argc, char** argv) {
+    tvm_workspace_t app_workspace;
+    static uint8_t g_aot_memory[TVMGEN_DEFAULT_WORKSPACE_SIZE];
+    StackMemoryManager_Init(&app_workspace, g_aot_memory, TVMGEN_DEFAULT_WORKSPACE_SIZE);
+    // Sizes automatically added by utils.create_demo_file
+    """ + \
+    f"\tuint32_t input_size = {np.prod(input_shape)};\n" + \
+    f"\tuint32_t output_size = {np.prod(output_shape)};\n" + \
+    """
+    int8_t *input = malloc(input_size * sizeof(int8_t));
+    int8_t *output = malloc(output_size * sizeof(int8_t));
+    // Fill first input with ones
+    for (uint32_t i = 0; i < input_size; i++){
+        input[i] = 1;
+    }
+    struct tvmgen_default_outputs outputs = {
+    	.output = output,
+    };
+    struct tvmgen_default_inputs inputs = {
+    	.input = input,
+    };
+    int32_t status = tvmgen_default_run(&inputs, &outputs);
+    free(input);
+    free(output);
+    if(status != 0){
+        abort();
+    }
+    return 0;
+}
+    """
+    print(c_code)
+    with open(path, "w") as file:
+        file.writelines(c_code)
+

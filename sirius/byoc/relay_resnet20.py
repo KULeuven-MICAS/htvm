@@ -1,4 +1,4 @@
-from utils import tvmc_compile_and_unpack, relay_soma_conv2d
+from utils import tvmc_compile_and_unpack, relay_soma_conv2d, create_demo_file
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -8,7 +8,7 @@ from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
 def relay_res_layer(input_tensor, name, input_channels, output_channels,
-                    repeat_in_block, repeat_block):
+                    repeat_in_block, repeat_block, stride_in_last=True):
     # initial setup
     params = {}
     input_tmp = input_tensor
@@ -27,7 +27,8 @@ def relay_res_layer(input_tensor, name, input_channels, output_channels,
             else:
                 strides = (1,1)
                 # in the very last 3x3 of one block the stride should be (2,2)
-                if(i == repeat_block - 1 and j == repeat_in_block - 1):
+                if(stride_in_last and (i == repeat_block - 1 and j == repeat_in_block - 1)):
+                    print("I'm here!")
                     strides = (2,2)
                 weights_shape = (output_channels, output_channels,3,3)
                 x, params_out = relay_soma_conv2d(x, 
@@ -42,16 +43,18 @@ def relay_res_layer(input_tensor, name, input_channels, output_channels,
         # Perform residual convolution (1x1)
         if i == 0:
             weights_shape = (output_channels,input_channels,1,1)
-            print(weights_shape)
+            #print(weights_shape)
         else:
             weights_shape = (output_channels,output_channels,1,1)
-            print(weights_shape)
-        if i != repeat_block - 1:
+            #print(weights_shape)
+        if ((i != repeat_block - 1) or (not (stride_in_last))):
             y, params_out = relay_soma_conv2d(input_tmp,
                     name + "_1x1conv_" + str(i),
                     weights_shape, np.ones(weights_shape, dtype=np.int8),
                     np.ones(output_channels, dtype=np.int32))
         else: 
+            print(stride_in_last)
+            print("Also here!")
             y, params_out = relay_soma_conv2d(input_tmp,
                     name + "_1x1conv_" + str(i),
                     weights_shape, np.ones(weights_shape, dtype=np.int8),
@@ -75,18 +78,36 @@ if __name__ == "__main__":
     # Connect resnet blocks
     repeat_in_block = 2
     repeat_block = 3
-    x, params_out = relay_res_layer(input_tensor, "res_block_16", 3, 16,
+    x, params_out = relay_soma_conv2d(input_tensor,
+                "conv1",
+                (16,3,3,3), np.ones((16,3,3,3), dtype=np.int8),
+                np.ones(16, dtype=np.int32))
+    params.update(params_out)
+    x, params_out = relay_res_layer(x, "res_block_16", 16, 16,
                                     repeat_in_block, repeat_block)
     params.update(params_out)
     x, params_out = relay_res_layer(x, "res_block_32", 16, 32,
                                     repeat_in_block, repeat_block)
     params.update(params_out)
     x, params_out = relay_res_layer(x, "res_block_64", 32, 64,
-                                    repeat_in_block, repeat_block)
+                                    repeat_in_block, repeat_block,
+                                    stride_in_last=False)
     params.update(params_out)
+
+    x = relay.nn.avg_pool2d(x, (8,8))
+    x = relay.reshape(x, (1,64))
+
+    fc_weights_name = "fc_weights"
+    fc_weights_shape = (10,64)
+    fc_weights = relay.var(fc_weights_name, 
+                           relay.TensorType(fc_weights_shape, "int8"))
+    params.update({fc_weights_name: tvm.nd.array(np.ones(fc_weights_shape, 
+                                                          dtype=np.int8))})
+    x = relay.nn.dense(x, fc_weights, out_dtype="int8")
     mod = tvm.ir.IRModule()
     mod = mod.from_expr(x)
     print(mod)
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target="c", fuse_layers=True)
+    tvmc_compile_and_unpack(model, target="soma, c", fuse_layers=True)
+    create_demo_file(mod)

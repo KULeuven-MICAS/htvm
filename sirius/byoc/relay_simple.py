@@ -1,4 +1,4 @@
-from utils import tvmc_compile_and_unpack, relay_soma_conv2d
+from utils import tvmc_compile_and_unpack, relay_soma_conv2d, create_demo_file
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -9,38 +9,45 @@ import numpy as np
 
 
 def create_model():
-    input_shape = (1, 3, 32, 32)
+    input_shape = (1, 1, 32, 32)
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
-    weights_shape = (16, 3, 3, 3)
+    weights_shape = (16, 1, 3, 3)
+    special_data = np.array([[-7,-5,-3,-2,-1,0,1,2,3] for i in range(16)])
+    special_data = special_data.reshape(weights_shape).astype(np.int8)
     x, params1 = relay_soma_conv2d(x, 'conv1', weights_shape, 
-                                   np.ones(weights_shape).astype(np.int8), 
+                                   special_data,
                                    np.ones(weights_shape[0]).astype(np.int32), 
                                    act=False, shift_bits=4)
-    weights_shape = (32, 16, 3, 3)
-    x, params2 = relay_soma_conv2d(x, 'conv2', weights_shape,
-                                   np.ones(weights_shape).astype(np.int8), 
-                                   np.ones(weights_shape[0]).astype(np.int32), 
-                                   act=True, shift_bits=5)
-    weights_shape = (16, 32, 3, 3)
-    x, params3 = relay_soma_conv2d(x, 'conv3', weights_shape,
-                                   np.ones(weights_shape).astype(np.int8),
-                                   np.ones(weights_shape[0]).astype(np.int32),
-                                   strides=(2,2),
-                                   act=True, shift_bits=5)
+   # weights_shape = (32, 16, 3, 3)
+   # special_data = np.array([[-1,0,1] for i in range(32*16*3)])
+   # special_data = special_data.reshape(weights_shape).astype(np.int8)
+   # x, params2 = relay_soma_conv2d(x, 'conv2', weights_shape,
+   #                                special_data, 
+   #                                np.ones(weights_shape[0]).astype(np.int32), 
+   #                                act=True, shift_bits=5)
 
-    y_shape = (1, 16, 16, 16)
-    y_name = "input_y"
-    y = relay.var(y_name, relay.TensorType(y_shape, 'int8'))
-    y_value = np.ones(y_shape).astype(np.int8)
-    y_param = {y_name: tvm.nd.array(y_value)} 
+   # weights_shape = (16, 32, 3, 3)
+   # special_data = np.array([[-5,-4,-3,-2,-1,0,1,2,3] for i in range(32*16)])
+   # special_data = special_data.reshape(weights_shape).astype(np.int8)
+   # x, params3 = relay_soma_conv2d(x, 'conv3', weights_shape,
+   #                                special_data,
+   #                                np.ones(weights_shape[0]).astype(np.int32),
+   #                                strides=(2,2),
+   #                                act=False, shift_bits=3)
 
-    x = relay.add(x, y)
+   # y_shape = (1, 16, 16, 16)
+   # y_name = "input_y"
+   # y = relay.var(y_name, relay.TensorType(y_shape, 'int8'))
+   # y_value = np.ones(y_shape).astype(np.int8)
+   # y_param = {y_name: tvm.nd.array(y_value)} 
 
-    # combine all params in one dictionary
-    params1.update(params2)
-    params1.update(params3)
-    params1.update(y_param)
+   # x = relay.add(x, y)
+
+   # # combine all params in one dictionary
+   # params1.update(params2)
+   # params1.update(params3)
+   # params1.update(y_param)
     params = params1
 
     # create an IR module from the relay expression
@@ -55,4 +62,5 @@ if __name__ == "__main__":
     mod, params = create_model()
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target="soma, c", fuse_layers=True)
+    tvmc_compile_and_unpack(model, target="c", fuse_layers=True)
+    create_demo_file(mod)
