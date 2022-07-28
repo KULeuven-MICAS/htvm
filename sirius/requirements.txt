@@ -1,6 +1,7 @@
 numpy
 decorator
 attrs
+psutil
 
 # pytest required for using `import tvm.relay as relay`
 pytest
