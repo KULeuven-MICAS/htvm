@@ -16,9 +16,13 @@ from tvm.relay.build_module import bind_params_by_name
 from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 from .register import register_pattern_table
 
+# don't remove this import even if it does not seem to be used
+# because this is the point where the soma_dory backend is registered
+import tvm.relay.backend.contrib.soma_dory
+
 
 @transform.function_pass(opt_level=0)
-class SomaGraphQuantizer(ExprMutator):
+class SomaDoryGraphQuantizer(ExprMutator):
     """Convert fake-quantized relay graph (from Soma ONNX file) into a real quantized relay graph
     """
 
@@ -36,20 +40,24 @@ class SomaGraphQuantizer(ExprMutator):
         new_args = [self.visit(arg) for arg in call.args]
 
         if call.op.name == 'nn.conv2d':
-            # replace nn.conv2d with qnn.conv2d
-            # WARNING: this code assumes that weight and bias are variables and not constants
-            w_shape = new_args[1].type_annotation.shape
-            new_call = relay.qnn.op.conv2d(new_args[0], new_args[1],
+            # replace nn.conv2d with qnn.conv2d and quantize weights (assume they are constant)
+            w = relay.const(new_args[1].data.numpy().astype(self.dtype))
+            new_call = relay.qnn.op.conv2d(new_args[0], w,
                                            relay.const(0),
                                            relay.const(0),
                                            relay.const(1.0),
                                            relay.const(1.0),
-                                           w_shape[-2:],
-                                           channels=w_shape[0],
+                                           w.data.shape[-2:],
+                                           channels=w.data.shape[0],
                                            strides=call.attrs.strides,
                                            padding=call.attrs.padding,
                                            dilation=call.attrs.dilation,
                                            groups=call.attrs.groups)
+
+        elif call.op.name == 'nn.bias_add':
+            # quantize bias to int32
+            new_args[1] = relay.const(new_args[1].data.numpy().astype('int32'))
+            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
 
         elif call.op.name == 'divide':
             # We currently assume that a divide op represents a requant operations after bias_add or element-wise sum
@@ -102,18 +110,6 @@ class SomaGraphQuantizer(ExprMutator):
         )
 
 
-def soma_params_quantizer(params, dtype):
-    """Convert a fake-quantized relay graph, read from soma onnx, into a real quantized relay graph
-    """
-    for k, v in params.items():
-        if k.endswith('bias'):
-            params[k] = tvm.nd.array(v.asnumpy().astype('int32'))
-        else:
-            params[k] = tvm.nd.array(v.asnumpy().astype(dtype))
-
-    return params
-
-
 def pattern_table():
     """
     Registers the patterns we want to match.
@@ -140,13 +136,13 @@ def pattern_table():
         return (True)
 
     return [
-        ("soma.qnn_conv2d", qnn_conv2d_pattern(), check_qnn_conv2d),
+        ("soma_dory.qnn_conv2d", qnn_conv2d_pattern(), check_qnn_conv2d),
     ]
 
 
-def partition_for_soma(mod, params=None, dpu=None, **opts):
+def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
     """
-    The partitioning sequence for the soma byoc
+    The partitioning sequence for the soma_dory byoc
     Parameters
     ----------
     mod The module to use
@@ -157,14 +153,14 @@ def partition_for_soma(mod, params=None, dpu=None, **opts):
 
     """
     if params:
-        params = soma_params_quantizer(params, 'int8')
+        mod["main"] = bind_params_by_name(mod["main"], params)
 
     seq = tvm.transform.Sequential(
         [
-            SomaGraphQuantizer('int8'),
+            SomaDoryGraphQuantizer('int8'),
             transform.InferType(),
             transform.MergeComposite(pattern_table()),
-            transform.AnnotateTarget(["soma"]),
+            transform.AnnotateTarget(["soma_dory"]),
             transform.PartitionGraph(),
             transform.InferType(),
         ]

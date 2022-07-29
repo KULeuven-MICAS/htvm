@@ -30,6 +30,7 @@ from tvm.relay.op.contrib.ethosu import partition_for_ethosu
 from tvm.relay.op.contrib.bnns import partition_for_bnns
 from tvm.relay.op.contrib.vitis_ai import partition_for_vitis_ai
 from tvm.relay.op.contrib.soma import partition_for_soma
+from tvm.relay.op.contrib.soma_dory import partition_for_soma_dory
 
 
 from tvm.driver.tvmc import TVMCException
@@ -81,6 +82,10 @@ REGISTERED_CODEGEN = {
     "soma": {
         "config_key": None,
         "pass_pipeline": partition_for_soma,
+    },
+    "soma_dory": {
+        "config_key": None,
+        "pass_pipeline": partition_for_soma_dory,
     },
 }
 
