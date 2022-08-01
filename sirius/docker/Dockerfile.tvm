@@ -15,4 +15,9 @@ RUN pip3 install numpy decorator attrs scipy pytest
 COPY sirius/requirements.txt /tvm-fork/sirius/requirements.txt
 # Installing dependencies of the python package
 RUN pip3 install -r /tvm-fork/sirius/requirements.txt
-# Creating directory for built tvm library.
+# install DORY
+WORKDIR /
+RUN git clone https://github.com/pulp-platform/dory.git
+WORKDIR /dory
+RUN pip3 install -e .
+WORKDIR /
