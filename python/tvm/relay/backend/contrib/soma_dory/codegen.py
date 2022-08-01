@@ -60,14 +60,14 @@ def create_dory_conv_node(call, index: int):
         raise ValueError(f"Expected number of args for doma_dory.qnn_conv2d is 3, got {len(call.args)}")
 
     conv_call = get_root_call(call.op.body, "qnn.conv2d")
-    requant_call = get_root_call(call.op.body, "qnn.requantize")
+    right_shift_call = get_root_call(call.op.body, "right_shift")
 
     # TODO: assert that weights and bias are constants
     input_dims = call.args[0].type_annotation.shape
-    output_dims = requant_call.args[0].checked_type.shape
+    output_dims = right_shift_call.args[0].checked_type.shape
     weights = call.args[1].data
     bias = call.args[2].data
-    shift_value = int(np.log2(requant_call.args[3].data.numpy()))
+    shift_value = right_shift_call.args[1].data
 
     node = Layer_node()
     node.name = 'Convolution'

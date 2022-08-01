@@ -109,5 +109,5 @@ if __name__ == "__main__":
     print(mod)
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target="soma, c", fuse_layers=True)
+    tvmc_compile_and_unpack(model, target="soma_dory, c", fuse_layers=True)
     create_demo_file(mod)

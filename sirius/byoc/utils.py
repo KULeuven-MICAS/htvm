@@ -88,7 +88,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     return x, params
 
 
-def tvmc_wrapper(model: TVMCModel, target: str = "soma, c", 
+def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c", 
                  fuse_layers: bool = True):
     ''' 
     Utility wrapper for TVMC that sets supported
@@ -100,7 +100,7 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma, c",
         This can be useful when debuggin the TVM-generated c code kernels.
     '''
     # Check arguments
-    assert((target == "soma, c") or (target == "c"))
+    assert((target == "soma_dory, c") or (target == "c"))
     # This has to be set by default to use the C runtime
     pass_context_configs = ['tir.disable_vectorize=1']
     if(fuse_layers == False):
@@ -117,7 +117,7 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma, c",
                   pass_context_configs=pass_context_configs,
                   )
             
-def tvmc_compile_and_unpack(model: TVMCModel, target: str ="soma, c",
+def tvmc_compile_and_unpack(model: TVMCModel, target: str ="soma_dory, c",
         fuse_layers: bool = True, build_path: str = "./build"):
     '''
     Utility function that calls tvmc_wrapper and extracts output mlf 

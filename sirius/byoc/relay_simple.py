@@ -9,11 +9,11 @@ import numpy as np
 
 
 def create_model():
-    input_shape = (1, 1, 32, 32)
+    input_shape = (1, 3, 32, 32)
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
-    weights_shape = (16, 1, 3, 3)
-    special_data = np.array([[-7,-5,-3,-2,-1,0,1,2,3] for i in range(16)])
+    weights_shape = (16, 3, 3, 3)
+    special_data = np.array([[-7,-5,-3,-2,-1,0,1,2,3] for i in range(16*3)])
     special_data = special_data.reshape(weights_shape).astype(np.int8)
     x, params1 = relay_soma_conv2d(x, 'conv1', weights_shape, 
                                    special_data,
@@ -62,5 +62,5 @@ if __name__ == "__main__":
     mod, params = create_model()
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target="c", fuse_layers=True)
+    tvmc_compile_and_unpack(model, target="soma_dory, c", fuse_layers=True)
     create_demo_file(mod)
