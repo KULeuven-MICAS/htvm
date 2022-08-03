@@ -2,6 +2,7 @@ import pathlib
 import tarfile
 import shutil
 import os
+import argparse
 import tvm
 import tvm.relay as relay
 import numpy as np
@@ -130,12 +131,15 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str ="soma_dory, c",
         This can be useful when debuggin the TVM-generated c code kernels.
     :param build_path: path to export mlf file output to
     '''
-    # check if build folder exists
     path = pathlib.Path(build_path)
-    if(path.is_dir()):
+    # check if build folder exists
+    if path.is_dir():
         # remove build folder and all contents
         shutil.rmtree(path)
         # make the build folder again
+        path.mkdir()
+    if not path.is_dir():
+        # If no build folder exists create one
         path.mkdir()
     # Compile new model
     tvmc_wrapper(model, target, fuse_layers)
@@ -216,3 +220,25 @@ int main(int argc, char** argv) {
     with open(path, "w") as file:
         file.writelines(c_code)
 
+def parse_cli_target() -> str:
+    '''
+    Utility function that reads arguments from command line
+    usage:
+        $ script_name.py --c
+    or:
+        $ script_name.py --soma_dory
+    resulting string can be used as target field for functions above
+    '''
+    parser = argparse.ArgumentParser(description="Utility argparser\
+                                                  for example scripts")
+    parser.add_argument('--c', dest='c', action='store_const', 
+                        const=True, default=False)
+    parser.add_argument('--soma_dory', dest='soma_dory', action='store_const',
+                        const=True, default=True)
+    args = parser.parse_args()
+    if args.c == True and args.soma_dory == True:
+        return "c"
+    elif args.soma_dory == True:
+        return "soma_dory, c"
+    else:
+        raise ValueError("Either choose --c or --soma_dory, not both")

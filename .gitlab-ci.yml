@@ -46,7 +46,25 @@ compile_relay_simple_c:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_simple.py 
+      - python3 relay_simple.py --c
+    artifacts:
+      paths:
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+compile_relay_simple_soma_dory:
+    stage: codegen_soma_dory
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_simple.py --soma_dory
       - sh copy_dory_files.sh
     artifacts:
       paths:
@@ -56,6 +74,7 @@ compile_relay_simple_c:
         - sirius/byoc/src
     tags:
       - podman
+
 
 build_relay_simple_c:
     stage: build_utvm
@@ -76,6 +95,70 @@ run_relay_simple_c:
     image: $CI_REGISTRY_IMAGE:latest
     dependencies:
       - build_relay_simple_c
+    script:
+      - sirius/byoc/build/demo
+    tags:
+      - podman
+
+
+compile_relay_resnet20_c:
+    stage: codegen_c
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_resnet20.py --c
+    artifacts:
+      paths:
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+compile_relay_resnet20_soma_dory:
+    stage: codegen_soma_dory
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_resnet20.py --soma_dory
+      - sh copy_dory_files.sh
+    artifacts:
+      paths:
+        - sirius/byoc/dory
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+
+build_relay_resnet20_c:
+    stage: build_utvm
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies:
+      - compile_relay_resnet20_c
+    script:
+      - cd sirius/byoc
+      - make -f Makefile.x86 all
+    artifacts:
+      paths:
+        - sirius/byoc/build/demo
+    tags:
+      - podman
+
+run_relay_resnet20_c:
+    stage: test_utvm
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies:
+      - build_relay_resnet20_c
     script:
       - sirius/byoc/build/demo
     tags:

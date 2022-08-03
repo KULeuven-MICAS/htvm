@@ -1,4 +1,8 @@
-from utils import tvmc_compile_and_unpack, relay_soma_conv2d, create_demo_file
+from utils import (
+        tvmc_compile_and_unpack, 
+        relay_soma_conv2d,
+        create_demo_file, 
+        parse_cli_target)
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -63,5 +67,5 @@ if __name__ == "__main__":
     mod, params = create_model()
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target="soma_dory, c", fuse_layers=True)
+    tvmc_compile_and_unpack(model, target=parse_cli_target(), fuse_layers=True)
     create_demo_file(mod)
