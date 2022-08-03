@@ -8,6 +8,7 @@
 ################################### ALIASES ####################################
 
 BUILD_DIR := build
+DORY_DIR := dory
 # Include paths
 STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime
 CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
@@ -19,24 +20,23 @@ STANDALONE_CRT_SRCS += $(STANDALONE_CRT_PATH)/src/runtime/crt/memory/stack_alloc
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
-SOMA_LIB_PATH = $(abspath include/sirius-high-level-library)
-SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
-SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
+DORY_SRCS = $(wildcard $(abspath $(DORY_DIR))/src/*.c)
+DORY_OBJS = $(subst .c,.o,$(DORY_SRCS))
+DORY_INC_PATH = $(abspath $(DORY_DIR))/include
+
 
 INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
 			 -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
 			 -I${CODEGEN_PATH}/host/include \
 			 -I${PWD}/include \
-             -I${SOMA_LIB_PATH}/include
+			 -I${DORY_INC_PATH}
 
 # Defining the source files for pulp-runtime
 PULP_APP = demo
-PULP_APP_SRCS = $(SOMA_SRCS) $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(abspath src/demo.c) 
+PULP_APP_SRCS = $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(DORY_SRCS) $(abspath src/demo.c) 
 PULP_INC_PATHS += -DSDK
 # Use -DNDEBUG to remove assertions in TVM runtime
 PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS) -DNDEBUG
-# Uncomment to trigger the auto debugging in the hardware library.
-#PULP_CFLAGS += -DSOMA_AUTO_DEBUG
 # Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
 # PULP_CFLAGS += -DRUNTIME_SOMA
 

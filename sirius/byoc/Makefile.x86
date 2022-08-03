@@ -1,14 +1,11 @@
 # General settings
 BUILD_DIR := build
-MODEL := model
-PYTHON := python3
 
 # Compiler options
 PKG_COMPILE_OPTS = -Wall -O0 -std=gnu99 #-fsanitize=address
-PULP_COMPILE_OPTS = -DSDK -m32 -DX86_SOMA
+PULP_COMPILE_OPTS = -DSDK -m32
 # For debug support - comment these out for reduced binary size
 PKG_COMPILE_OPTS += -g
-PULP_COMPILE_OPTS += -DSOMA_AUTO_DEBUG
 
 # Include paths
 STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime
@@ -17,10 +14,6 @@ CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 # Sources
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
-
-SOMA_LIB_PATH = $(abspath include/sirius-high-level-library)
-SOMA_SRCS = $(wildcard $(SOMA_LIB_PATH)/src/*.c)
-SOMA_OBJS = $(subst .c,.o,$(SOMA_SRCS))
 
 # Compiler selection
 CC = gcc
@@ -33,8 +26,7 @@ PKG_CFLAGS = ${PKG_COMPILE_OPTS}\
 	     -I${STANDALONE_CRT_PATH}/include \
 	     -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
 	     -I${CODEGEN_PATH}/host/include \
-	     -I${PWD}/include \
-             -I${SOMA_LIB_PATH}/include
+	     -I${PWD}/include 
 
 # These targets don't make self-titled files
 .PHONY: all clean
@@ -54,11 +46,11 @@ $(BUILD_DIR)/libcodegen.a: $(CODEGEN_SRCS)
 	$(AR) -cr $(abspath $(BUILD_DIR)/libcodegen.a) $(CODEGEN_OBJS)
 	$(RANLIB) $(abspath $(BUILD_DIR)/libcodegen.a)
 
-$(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a $(SOMA_SRCS)
+$(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a
 	mkdir -p $(@D)
 	$(CC) $(PKG_CFLAGS) -o  $@ $^
 
 clean:
-	rm -f $(SOMA_OBJS)
+	rm -f $(CODEGEN_OBJS) $(BUILD_DIR)/demo
 
 

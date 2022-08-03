@@ -6,8 +6,8 @@ from tvm.driver.tvmc.compiler import compile_model
 from tvm.relay.backend import Executor, Runtime
 import onnx
 
-byoc_target = 'soma'
-#byoc_target = 'soma_dory'
+#byoc_target = 'soma'
+byoc_target = 'soma_dory'
 
 # load onnx model
 onnx_model = onnx.load('model.onnx')
