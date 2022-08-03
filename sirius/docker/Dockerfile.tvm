@@ -19,5 +19,8 @@ RUN pip3 install -r /tvm-fork/sirius/requirements.txt
 WORKDIR /
 RUN git clone https://github.com/pulp-platform/dory.git
 WORKDIR /dory
+RUN git submodule update --remote --init dory/Hardware_targets/Diana/Backend_Kernels/dory-hal
 RUN pip3 install -e .
 WORKDIR /
+ENV TVM_HOME=/tvm-fork
+ENV PYTHONPATH=/tvm-fork/python

@@ -4,7 +4,8 @@ variables:
 stages:
     - build_container
     - build_tvm
-    - test_tvm
+    - codegen_c
+    - codegen_soma_dory
     - build_utvm
     - test_utvm
 
@@ -36,8 +37,8 @@ build_tvm_release:
     tags:
       - podman
 
-compile_ews:
-    stage: test_tvm
+compile_relay_simple_c:
+    stage: codegen_c
     image: $CI_REGISTRY_IMAGE:latest
     dependencies: 
       - build_tvm_release
@@ -45,42 +46,36 @@ compile_ews:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 soma_codegen.py 
-      - mkdir -p build
-      - mv model.tar build
-      - tar -xf build/model.tar --directory=build
-      - rm build/model.tar
+      - python3 relay_simple.py 
+      - sh copy_dory_files.sh
     artifacts:
       paths:
+        - sirius/byoc/dory
         - sirius/byoc/build
         - sirius/byoc/include
         - sirius/byoc/src
     tags:
       - podman
 
-build_ews:
+build_relay_simple_c:
     stage: build_utvm
     image: $CI_REGISTRY_IMAGE:latest
     dependencies:
-      - compile_ews
+      - compile_relay_simple_c
     script:
-      - cd sirius/byoc/build
-      - git clone https://${CI_USERNAME_SIRIUS_HIGH_LEVEL_LIBRARY}:${CI_PASSWORD_SIRIUS_HIGH_LEVEL_LIBRARY}@gitlab.com/soma_library/sirius-high-level-library
-      - cd sirius-high-level-library
-      - git checkout 5315128
-      - cd ../..
-      - make -f Makefile.x86 build/stack_allocator.o build/crt_backend_api.o build/libcodegen.a build/demo
+      - cd sirius/byoc
+      - make -f Makefile.x86 all
     artifacts:
       paths:
         - sirius/byoc/build/demo
     tags:
       - podman
 
-run_ews:
+run_relay_simple_c:
     stage: test_utvm
     image: $CI_REGISTRY_IMAGE:latest
     dependencies:
-      - build_ews
+      - build_relay_simple_c
     script:
       - sirius/byoc/build/demo
     tags:
