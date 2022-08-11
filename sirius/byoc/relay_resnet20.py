@@ -99,7 +99,7 @@ if __name__ == "__main__":
                                     stride_in_last=False)
     params.update(params_out)
 
-    x = relay.nn.avg_pool2d(x, (8,8))
+    x = relay.nn.max_pool2d(x, pool_size=(8,8), strides=(8,8))
     x = relay.reshape(x, (1,64))
 
     fc_weights_name = "fc_weights"
@@ -114,5 +114,5 @@ if __name__ == "__main__":
     print(mod)
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target=parse_cli_target(), fuse_layers=True)
-    create_demo_file(mod)
+    tvmc_compile_and_unpack(model, target=parse_cli_target(), fuse_layers=False)
+    create_demo_file(mod, target=parse_cli_target())
