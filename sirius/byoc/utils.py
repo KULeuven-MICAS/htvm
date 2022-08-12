@@ -78,6 +78,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                             weights_shape[-2:], channels=conv_channels, 
                             strides=strides,
                             padding=padding)
+    # todo 32 bits
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits)) 
     x = relay.op.clip(x, a_min=-128, a_max=127)
@@ -150,7 +151,7 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str ="soma_dory, c",
     # remove the archive
     os.remove(mlf_path)
 
-def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c"):
+def create_demo_file(mod: tvm.ir.IRModule, target : str = "soma_dory, c", path: str = "src/demo.c"):
     '''
     Function that creates a demo file in which inputs and outputs of the 
     right size are allocated and setup automatically. Based on:
@@ -176,14 +177,41 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c"):
     print(f"\t {input_shape}")
     print(f"\toutput ({output_dtype}):")
     print(f"\t {output_shape}")
+    if target == "soma_dory, c":
+        malloc_statements =  \
+        """
+        int8_t *input = (int8_t*)malloc_wrapper(input_size * sizeof(int8_t));
+        int8_t *output = (int8_t*)malloc_wrapper(output_size * sizeof(int8_t));
+        """
+        extra_includes = "#include <pulp.h>\n#include <tvm_runtime_pulp.h>\n#include <pulp_rt_malloc_wrapper.h>\n"
+        free_statements = \
+        """
+        free_wrapper(input);
+        free_wrapper(output);
+        """
+        
+    else:
+        malloc_statements =  \
+        """
+        int8_t *input = malloc(input_size * sizeof(int8_t));
+        int8_t *output = malloc(output_size * sizeof(int8_t));
+        """
+        extra_includes = "#include <tvm_runtime.h>"
+        free_statements = \
+        """
+        free(input);
+        free(output);
+        """
+
 
     c_code = \
-    """
+    f""" 
 #include <stdio.h>
 #include <stdint.h>
-#include <tvm_runtime.h>
 #include "tvmgen_default.h"
-
+{extra_includes}
+    """ + \
+    """
 int abs(int v) {return v * ((v > 0) - (v < 0)); }
 
 int main(int argc, char** argv) {
@@ -194,13 +222,13 @@ int main(int argc, char** argv) {
     """ + \
     f"\tuint32_t input_size = {np.prod(input_shape)};\n" + \
     f"\tuint32_t output_size = {np.prod(output_shape)};\n" + \
+    malloc_statements + \
     """
-    int8_t *input = malloc(input_size * sizeof(int8_t));
-    int8_t *output = malloc(output_size * sizeof(int8_t));
     // Fill first input with ones
     for (uint32_t i = 0; i < input_size; i++){
         input[i] = 1;
     }
+
     struct tvmgen_default_outputs outputs = {
     	.output = output,
     };
@@ -208,8 +236,9 @@ int main(int argc, char** argv) {
     	.input = input,
     };
     int32_t status = tvmgen_default_run(&inputs, &outputs);
-    free(input);
-    free(output);
+    """ + \
+    free_statements + \
+    """
     if(status != 0){
         abort();
     }
