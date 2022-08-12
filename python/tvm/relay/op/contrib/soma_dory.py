@@ -3,6 +3,8 @@ Operations to support the SOMA accelerator.
 """
 
 import tvm
+import logging
+import numpy as np
 from tvm import relay
 
 from ...expr_functor import ExprMutator
@@ -19,6 +21,8 @@ from .register import register_pattern_table
 # don't remove this import even if it does not seem to be used
 # because this is the point where the soma_dory backend is registered
 import tvm.relay.backend.contrib.soma_dory
+
+logger = logging.getLogger("SomaDory")
 
 
 @transform.function_pass(opt_level=0)
@@ -61,13 +65,14 @@ class SomaDoryGraphQuantizer(ExprMutator):
 
         elif call.op.name == 'divide':
             # We currently assume that a divide op represents a requant operations after bias_add or element-wise sum
-            new_call = relay.qnn.op.requantize(new_args[0],
-                                               relay.const(1.0),
-                                               relay.const(0),
-                                               new_args[1],
-                                               relay.const(0),
-                                               axis=1,
-                                               out_dtype=self.dtype)
+            # Since the currently existing 'qnn.op.requantize' does not support floor-based rounding, we construct our
+            # own requantization using a set of primitive relay ops. We expect that the division factor is power-of-two
+            # and therefore our custom requantization is a sequence of these ops: right_shift, clip, cast.
+            shift_factor = int(np.log2(new_args[1].data.numpy()))
+            right_shift = relay.op.right_shift(new_args[0], relay.const(shift_factor))
+            clip = relay.op.clip(right_shift, a_min=-128, a_max=127)
+            new_call = relay.op.cast(clip, self.dtype)
+
         else:
             new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
 
@@ -110,6 +115,86 @@ class SomaDoryGraphQuantizer(ExprMutator):
         )
 
 
+def qnn_conv2d_pattern():
+    """Create pattern for qnn.conv2D with optional fused relu."""
+    qnn_conv2d = is_op("qnn.conv2d")(
+        wildcard(), wildcard(), is_constant(), is_constant(),
+        is_constant(), is_constant()
+    )
+    bias_add = is_op("nn.bias_add")(qnn_conv2d, wildcard())
+    right_shift = is_op("right_shift")(bias_add,
+                                       is_constant())
+    # TODO: figure out how to match on attributes for clip?
+    clip = is_op("clip")(right_shift)
+    cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
+    # optionally have extra clip/ReLU
+    act_or_cast = cast.optional(lambda x: is_op("clip")(x))
+    return act_or_cast
+
+
+def check_qnn_conv2d(pattern):
+    """Check if the Conv2D is supported by the soma dory accelerator"""
+
+    if str(pattern.op.name) == "clip":
+        clip = pattern
+        cast = clip.args[0]
+    else:
+        cast = pattern
+    right_shift = cast.args[0].args[0]
+
+    # Check range of shift factor
+    shift_factor = right_shift.args[1].data.numpy()
+    if shift_factor < 0 or shift_factor > 31:
+        logger.warning("Conv2d shift factor must be in range [0, 31], but got {shift_factor}. Acceleration for this conv2d is not supported")
+        return False
+
+    right_shift_input = right_shift.args[0]
+
+    # For now, we don't support convolutions without bias
+    if str(right_shift_input.op.name) != "nn.bias_add":
+        logger.warning("Found convolution without nn.bias_add. Acceleration for this conv2d is not supported")
+        return False
+
+    bias_add = right_shift_input
+
+    # Check bias dtype
+    bias_dtype = bias_add.args[1].checked_type.dtype
+    if bias_dtype != 'int32':
+        logger.warning(f"Expected nn.bias_add parameters to be of type int32, but got {bias_dtype}. Acceleration for this conv2d is not supported")
+        return False
+
+    conv2d = bias_add.args[0]
+
+    def is_conv2d_attr_value_supported(attrs, name, supported_values):
+        attr = attrs[name]
+
+        if isinstance(attr, tvm.ir.container.Array):
+            attr = list(attr)
+
+        if attr not in supported_values:
+            logger.warning(f"Expected qnn.conv2d {name} to be one of {supported_values}, but got {attr}. \
+                            Acceleration for this conv2d is not supported")
+            return False
+
+        return True
+
+    # check conv2d attributes
+    if (not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_size', [[1, 1], [3, 3], [5, 5], [7, 7]])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'padding', [4*[0], 4*[1], [1, 1, 0, 0], [0, 0, 1, 1]])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'dilation', [[1, 1]])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', [1])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_layout', ['OIHW'])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'data_layout', ['NCHW'])):
+
+       return False
+
+    #conv2d_input = conv2d.args[0]
+    #conv2d_weight = conv2d.args[1]
+
+    return True
+
+
 def pattern_table():
     """
     Registers the patterns we want to match.
@@ -117,27 +202,6 @@ def pattern_table():
     -------
         The patterns.
     """
-    def qnn_conv2d_pattern():
-        """Create pattern for qnn.conv2D with optional fused relu."""
-        qnn_conv2d = is_op("qnn.conv2d")(
-            wildcard(), wildcard(), is_constant(), is_constant(),
-            is_constant(), is_constant()
-        )
-        bias_add = is_op("nn.bias_add")(qnn_conv2d, wildcard())
-        right_shift = is_op("right_shift")(bias_add,
-                                           is_constant())
-        # TODO: figure out how to match on attributes for clip?
-        clip = is_op("clip")(right_shift)
-        cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
-        # optionally have extra clip/ReLU
-        act_or_cast = cast.optional(lambda x: is_op("clip")(x))
-        return act_or_cast
-       
-    def check_qnn_conv2d(pattern):
-        """Check if the Conv2D is supported by CMSIS-NN."""
-
-        # just pretend that it is always supported for now
-        return (True)
 
     return [
         ("soma_dory.qnn_conv2d", qnn_conv2d_pattern(), check_qnn_conv2d),
