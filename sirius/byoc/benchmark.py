@@ -86,7 +86,7 @@ def add_tvm_test_code_in_main(code_string: str):
     return result
 
 
-def generate_gdb_script(tvm_kernels, logging_file="benchmark.txt"):
+def generate_gdb_script(kernel_counters, logging_file="benchmark.txt"):
     """
     This code will generate gdb script which will print every performance
     counter by stepping after tvmgen_default_run and then printing out
@@ -107,22 +107,39 @@ def generate_gdb_script(tvm_kernels, logging_file="benchmark.txt"):
         "c\n" + \
         "n\n"
     body = ""
+    for kernel_counter in kernel_counters:
+        body += f"print {kernel_counter}\n"
     closing = \
         "set logging off\n" + \
         "quit\n"
-    for kernel_no in range(len(tvm_kernels)):
-        body += f"print perf_cyc_tvm_{kernel_no}\n"
     return preamble + body + closing
 
+def generate_kernel_counters(all_kernels, only_tvm=False):
+    kernel_counters = []
+    tvm_counter = 0
+    for kernel in all_kernels:
+        # check if the kernel is TVM- or DORY-generated
+        regex_function = "tvmgen_default_soma_dory_main_(\d*)"
+        match_object = re.search(regex_function, kernel, flags=re.MULTILINE)
+        if not only_tvm and (match_object != None):
+            function_number = match_object[1]
+            kernel_counters.append(f"perf_setup_{function_number}")
+            kernel_counters.append(f"perf_calc_{function_number}")
+            kernel_counters.append(f"perf_retr_{function_number}")
+        else:
+            kernel_counters.append(f"perf_cyc_tvm_{tvm_counter}")
+            tvm_counter += 1
+    return kernel_counters
 
-def parse_gdb_log(tvm_kernels, file_name = "benchmark.txt"):
+
+def parse_gdb_log(file_name = "benchmark.txt"):
     with open(file_name, "r") as log_file:
         log = log_file.read()
         gdb_regex = r"\$\d* = (\d*)"
         entries = re.finditer(gdb_regex, log, flags=re.MULTILINE) 
         # Return dictionary which contains names and cycle counts
-        return {tvm_kernels[i]:e[1] for i,e in enumerate(entries)}
-
+        return [i for i in entries]
+        #return {tvm_kernels[i]:e[1] for i,e in enumerate(entries)}
 
 
 def get_kernels(main_function):
@@ -135,18 +152,18 @@ def get_kernels(main_function):
     return tvm_kernels, dory_kernels, all_kernels
 
 
-def add_headers(code_string, tvm_kernels):
-    no_of_counters = len(tvm_kernels)
+def add_headers(code_string, kernel_counters):
     # Add global declaration of perf structure 
     global_counter_decl = "volatile rt_perf_t *perf;\n"
     # Also declare counter stores for all kernels
-    for i in range(no_of_counters):
-        global_counter_decl += f"int perf_cyc_tvm_{i};\n"
+    for kernel_counter in kernel_counters:
+        global_counter_decl += f"int {kernel_counter};\n"
     # Add <<#include "pulp.h">> (only once, hence count=1)
     replaced_code_string  = re.sub(RE_INC, "\\1\n#include \"pulp.h\"\n" + \
                                    global_counter_decl,
                                    code_string, count=1, flags=re.MULTILINE)
     return replaced_code_string
+
 
 def replace_dory_declarations(code_string):
     # Remove declarations here, since they were moved to default_lib1.c
@@ -156,7 +173,8 @@ def replace_dory_declarations(code_string):
     regex_init = r"int perf_cyc, perf_cyc1, perf_cyc2;\n" + \
                  r"\s*rt_perf_init\(perf\);\n" + \
                  r"\s*rt_perf_conf\(perf, \(1<<RT_PERF_CYCLES\)\);"
-    replaced = re.sub(regex_decl, "", code_string, count=1, flags=re.MULTILINE)
+    # The perf pointer is declared in default_lib1.c so it has to be declared as extern
+    replaced = re.sub(regex_decl, "extern rt_perf_t *perf;", code_string, count=1, flags=re.MULTILINE)
     replaced = re.sub(regex_init, "", replaced, count=1, flags=re.MULTILINE)
     # Change the names of perf_cyc etc to match their function name
     # First extract the function name
@@ -177,7 +195,13 @@ def replace_dory_declarations(code_string):
     subst_retr = f"perf_retr_{function_number}"
     replaced = re.sub(regex_retr, subst_retr, replaced, 
                       count=0, flags=re.MULTILINE)
-
+    # insert global variables here
+    global_counter_decl = "int " + subst_setup + ";\n"
+    global_counter_decl += "int " + subst_calc + ";\n"
+    global_counter_decl += "int " + subst_retr + ";\n"
+    replaced  = re.sub(r"(include \"dory.h\")",
+                       "\\1\n" + global_counter_decl,
+                       replaced, count=1, flags=re.MULTILINE)
     return replaced
 
 def update_dory_default_libs(codegen_dir):
@@ -208,29 +232,34 @@ if __name__ == "__main__":
     gdb_script_name = "./gdb_benchmark.sh"
     with open(file_name, "r+") as lib1:
         data = lib1.read()
+        # Failsafe
         check = re.search("#include \"pulp.h\"", data, flags=re.MULTILINE)
         if check != None:
             raise RuntimeError("You've already run the script, not updating")
         main_function_string = re.search(RE_MAIN, data, flags=re.MULTILINE)[0]
         tvm_ks, dory_ks, all_ks = get_kernels(main_function_string)
+        kernel_counters = generate_kernel_counters(all_ks)
+        tvm_kernel_counters = generate_kernel_counters(all_ks, only_tvm = True)
         replaced_code = add_tvm_test_code_in_main(main_function_string)
         # Write test script which goes with this file
         with open(gdb_script_name, "w") as gdb_script:
-            gdb_script.write(generate_gdb_script(tvm_ks,"benchmark.txt"))
+            gdb_script.write(generate_gdb_script(kernel_counters,"benchmark.txt"))
 
 
         # Replace the main function call with added perf counters
         replaced_script = re.sub(RE_MAIN, replaced_code, data, count=0,
                                  flags=re.MULTILINE)
-        replaced_script = add_headers(replaced_script, tvm_ks)
+        replaced_script = add_headers(replaced_script, tvm_kernel_counters)
         # Seek and truncate are necessary for overwriting the read file
         lib1.seek(0)
         lib1.write(replaced_script)
         lib1.truncate()
         print(f"Updated main file @ {file_name}")
     input("Ready for parsing GDB output, please start the benchmark on diana")
-    results = parse_gdb_log(tvm_ks)
+    results = parse_gdb_log()
     print(f"Results")
     print(f"=======")
-    for i, (name, cycles) in enumerate(results.items()):
-        print(f"{i}) {name: <50} : {int(cycles):,}")
+    for i in results:
+        print(i)
+    #for i, (name, cycles) in enumerate(results.items()):
+    #    print(f"{i}) {name: <50} : {int(cycles):,}")
