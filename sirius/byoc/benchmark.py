@@ -139,9 +139,8 @@ def parse_gdb_log(file_name = "benchmark.txt"):
         log = log_file.read()
         gdb_regex = r"\$\d* = (\d*)"
         entries = re.finditer(gdb_regex, log, flags=re.MULTILINE) 
-        # Return dictionary which contains names and cycle counts
-        return [i for i in entries]
-        #return {tvm_kernels[i]:e[1] for i,e in enumerate(entries)}
+        # Return only the cycles, not the entire regex match
+        return [i[1] for i in entries]
 
 
 def get_kernels(main_function):
@@ -255,6 +254,77 @@ def update_dory_default_libs(codegen_dir):
             print(f"Updated {default_lib}")
     
 
+class DianaResult():
+    # kernel names are supposed to be stored in calling order.
+    # If layer is called multiple times, it has to be duplicated.
+    kernel_names = []
+    # results strings are expected to be stored in the same order
+    # TVM  result --> one cycle count (no setup and retr)
+    # DORY result --> three cycle counts (setup, calc, and retr)
+    results_string = []
+
+    def __init__(self, kernels, gdb_log):
+        self.kernel_names = kernels
+        self.results_string = gdb_log
+            
+    def __get_longest_name(self):
+        """
+        Gets the first occurence of the longest name in self.kernel_names
+        """
+        longest_length = 0
+        longest_string = ""
+        for name in self.kernel_names:
+            if len(name) > longest_length:
+                longest_length = len(name)
+                longest_string = name
+        return longest_string
+    
+    @staticmethod
+    def get_dory_number(kernel_name):
+        """
+        Get dory function number or return None if no dory function
+
+        E.g. for "tvmgen_default_soma_dory_main_57", return 57
+             for "tvmgen_default_fused_add4" return None
+        """
+        regex_function = "tvmgen_default_soma_dory_main_(\d*)"
+        match_object = re.search(regex_function, kernel_name, 
+                                 flags=re.MULTILINE)
+        if match_object is not None:
+            return match_object[1]
+        else:
+            return None
+
+
+    def pretty_print(self):
+        """
+        Pretty print results
+        """
+        results = iter(self.results_string)
+        offset = len(self.__get_longest_name())
+        separator = (offset + 30) * "-"
+        i = 0
+        for i, name in enumerate(self.kernel_names):
+            name_parsed = self.get_dory_number(name)
+            if name_parsed is None:
+                # This is a TVM kernel
+                cycles = next(results)
+                print(separator)
+                print(f"{i:<3}) {name: <{offset}}         : {int(cycles):,}")
+            else:
+                # This is a Dory kernel
+                setup = next(results)
+                calc = next(results)
+                retr = next(results)
+                print(separator)
+                print(f"{i:<3}) {name: <{offset}} : setup : {int(setup):,}")
+                empty = ""
+                print(f"     {empty:<{offset}} : calc  : {int(calc):,}")
+                print(f"     {empty:<{offset}} : retr  : {int(retr):,}")
+                
+
+
+     
 if __name__ == "__main__":
     codegen_dir = "./build/codegen/host/src/"
     file_name = codegen_dir + "default_lib1.c"
@@ -294,10 +364,8 @@ if __name__ == "__main__":
     with open(gdb_script_name, "w") as gdb_script:
         gdb_script.write(generate_gdb_script(kernel_counters, gdb_log_name))
     input("Ready for parsing GDB output, please start the benchmark on diana")
-    results = parse_gdb_log()
-    print(f"Results")
-    print(f"=======")
-    for i in results:
-        print(i)
-    #for i, (name, cycles) in enumerate(results.items()):
-    #    print(f"{i}) {name: <50} : {int(cycles):,}")
+    log_results = parse_gdb_log()
+    result = DianaResult(all_ks, log_results)
+    print("-----  RESULTS ------")
+    result.pretty_print()
+
