@@ -193,14 +193,15 @@ def replace_dory_declarations(code_string):
                  r"\s*volatile rt_perf_t \*perf;\n" + \
                  r"\s*perf = rt_alloc\(RT_ALLOC_L2_CL_DATA, " + \
                  "sizeof\(rt_perf_t\)\);"
-    regex_init = r"int perf_cyc, perf_cyc1, perf_cyc2;\n" + \
-                 r"\s*rt_perf_init\(perf\);\n" + \
-                 r"\s*rt_perf_conf\(perf, \(1<<RT_PERF_CYCLES\)\);"
     # The perf pointer is declared in default_lib1.c 
     # so it has to be declared as extern
     replaced = re.sub(regex_decl, "extern rt_perf_t *perf;", 
                       code_string, count=1, flags=re.MULTILINE)
-    replaced = re.sub(regex_init, "", replaced, count=1, flags=re.MULTILINE)
+    # These declarations are not valid anymore
+    regex_init = r"int perf_cyc, perf_cyc1, perf_cyc2;\n"
+    subst_init = "rt_perf_reset(perf);\n"
+    replaced = re.sub(regex_init, subst_init, replaced, count=1, 
+                      flags=re.MULTILINE)
     # Change the names of perf_cyc etc to match their function name
     # First extract the function name
     regex_function = r"int32_t (tvmgen_default_soma_dory_main_(\d*))(.*)"
