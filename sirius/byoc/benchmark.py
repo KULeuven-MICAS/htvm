@@ -1,6 +1,7 @@
 import re
 import pathlib
 import datetime
+import glob
 
 """
 Regex explanation:
@@ -45,7 +46,7 @@ This regex matches include statements in the beginning of a C file e.g.
 RE_INC = r"(#include (?:\"|<).*(?:\"|>))"
 
 
-def add_test_code_in_main(code_string: str):
+def add_tvm_test_code_in_main(code_string: str):
     """
     This function searches with regex for lines like
     returns: list of all functions detected in main
@@ -60,8 +61,7 @@ def add_test_code_in_main(code_string: str):
     def add_perf_counter(matchobj):
         nonlocal perf_counter_no
         setup = \
-            "volatile rt_perf_t *perf;\n" + \
-            "  perf = rt_alloc(RT_ALLOC_L2_CL_DATA, sizeof(rt_perf_t));\n" + \
+                        "  perf = rt_alloc(RT_ALLOC_L2_CL_DATA, sizeof(rt_perf_t));\n" + \
             "  rt_perf_init(perf);\n" + \
             "  rt_perf_conf(perf, (1<<RT_PERF_CYCLES));\n  "
         before = \
@@ -70,7 +70,7 @@ def add_test_code_in_main(code_string: str):
         after = \
             "  rt_perf_stop(perf);\n" + \
             "  rt_perf_save(perf);\n" + \
-            f"  perf_cyc_{perf_counter_no} = rt_perf_get(perf, RT_PERF_CYCLES);\n" + \
+            f"  perf_cyc_tvm_{perf_counter_no} = rt_perf_get(perf, RT_PERF_CYCLES);\n" + \
             "  rt_perf_reset(perf);"
         # Use perf_counter_no from outside to see if this is the first replacement
         nonlocal first_replacement
@@ -111,7 +111,7 @@ def generate_gdb_script(tvm_kernels, logging_file="benchmark.txt"):
         "set logging off\n" + \
         "quit\n"
     for kernel_no in range(len(tvm_kernels)):
-        body += f"print perf_cyc_{kernel_no}\n"
+        body += f"print perf_cyc_tvm_{kernel_no}\n"
     return preamble + body + closing
 
 
@@ -135,9 +135,76 @@ def get_kernels(main_function):
     return tvm_kernels, dory_kernels, all_kernels
 
 
+def add_headers(code_string, tvm_kernels):
+    no_of_counters = len(tvm_kernels)
+    # Add global declaration of perf structure 
+    global_counter_decl = "volatile rt_perf_t *perf;\n"
+    # Also declare counter stores for all kernels
+    for i in range(no_of_counters):
+        global_counter_decl += f"int perf_cyc_tvm_{i};\n"
+    # Add <<#include "pulp.h">> (only once, hence count=1)
+    replaced_code_string  = re.sub(RE_INC, "\\1\n#include \"pulp.h\"\n" + \
+                                   global_counter_decl,
+                                   code_string, count=1, flags=re.MULTILINE)
+    return replaced_code_string
+
+def replace_dory_declarations(code_string):
+    # Remove declarations here, since they were moved to default_lib1.c
+    regex_decl = r"\/\/ perf measurement begin\n" + \
+                 r"\s*volatile rt_perf_t \*perf;\n" + \
+                 r"\s*perf = rt_alloc\(RT_ALLOC_L2_CL_DATA, sizeof\(rt_perf_t\)\);"
+    regex_init = r"int perf_cyc, perf_cyc1, perf_cyc2;\n" + \
+                 r"\s*rt_perf_init\(perf\);\n" + \
+                 r"\s*rt_perf_conf\(perf, \(1<<RT_PERF_CYCLES\)\);"
+    replaced = re.sub(regex_decl, "", code_string, count=1, flags=re.MULTILINE)
+    replaced = re.sub(regex_init, "", replaced, count=1, flags=re.MULTILINE)
+    # Change the names of perf_cyc etc to match their function name
+    # First extract the function name
+    regex_function = r"int32_t (tvmgen_default_soma_dory_main_(\d*))(.*)"
+    function_search  = re.search(regex_function, replaced, flags=re.MULTILINE)
+    # E.g. for "tvmgen_default_soma_dory_main_57", extract "57"
+    function_number = function_search[2]
+    # Matches "perf_cyc", but not perf_cyc2, perf_cyc1
+    regex_setup = r"perf_cyc(?!1|2)"
+    subst_setup = f"perf_setup_{function_number}"
+    replaced = re.sub(regex_setup, subst_setup, replaced, 
+                      count=0, flags=re.MULTILINE)
+    regex_calc = r"perf_cyc1"
+    subst_calc = f"perf_calc_{function_number}"
+    replaced = re.sub(regex_calc, subst_calc, replaced, 
+                      count=0, flags=re.MULTILINE)
+    regex_retr = r"perf_cyc2"
+    subst_retr = f"perf_retr_{function_number}"
+    replaced = re.sub(regex_retr, subst_retr, replaced, 
+                      count=0, flags=re.MULTILINE)
+
+    return replaced
+
+def update_dory_default_libs(codegen_dir):
+    # Find all default_libx.c files
+    glob_pattern = codegen_dir + "default_lib*.c"
+    default_libs = glob.glob(glob_pattern)
+    # remove default_lib0.c and default_lib1.c
+    default_libs.remove(codegen_dir+"default_lib0.c")
+    default_libs.remove(codegen_dir+"default_lib1.c")
+    for default_lib in default_libs:
+        with open(default_lib, "r+") as dory_lib:
+            data = dory_lib.read()
+            replaced = replace_dory_declarations(data)
+            dory_lib.write(replaced)
+            dory_lib.seek(0)
+            dory_lib.write(replaced)
+            dory_lib.truncate()
+            print(f"Updated {default_lib}")
+
+
 if __name__ == "__main__":
     verbose = False
     file_name = "./build/codegen/host/src/default_lib1.c"
+    # Test code for dory adaptions
+    codegen_dir = "./build/codegen/host/src/"
+    # Update test code for dory files
+    update_dory_default_libs(codegen_dir)
     gdb_script_name = "./gdb_benchmark.sh"
     with open(file_name, "r+") as lib1:
         data = lib1.read()
@@ -146,45 +213,24 @@ if __name__ == "__main__":
             raise RuntimeError("You've already run the script, not updating")
         main_function_string = re.search(RE_MAIN, data, flags=re.MULTILINE)[0]
         tvm_ks, dory_ks, all_ks = get_kernels(main_function_string)
-        replaced_code = add_test_code_in_main(main_function_string)
-        if verbose:
-            print("Main code with added performance counters:")
-            print(replaced_code)
-            print("\nTVM generated kernels")
-            print("=====================")
-            for kernel in tvm_ks:
-                print("  " + kernel)
-            print("\nDORY generated kernels")
-            print("======================")
-            for kernel in dory_ks:
-                print("  " + kernel)
+        replaced_code = add_tvm_test_code_in_main(main_function_string)
         # Write test script which goes with this file
         with open(gdb_script_name, "w") as gdb_script:
             gdb_script.write(generate_gdb_script(tvm_ks,"benchmark.txt"))
+
+
         # Replace the main function call with added perf counters
         replaced_script = re.sub(RE_MAIN, replaced_code, data, count=0,
                                  flags=re.MULTILINE)
-        # Add <<#include "pulp.h">> (only once, hence count=1)
-        no_of_counters = len(tvm_ks)
-        global_counter_decl = "int "
-        for i in range(no_of_counters):
-            global_counter_decl += f"perf_cyc_{i}"
-            if i == no_of_counters - 1:
-                global_counter_decl += ";"
-            else:
-                global_counter_decl += ","
-
-        replaced_script = re.sub(RE_INC, "\\1\n#include \"pulp.h\"\n" + \
-                                 global_counter_decl,
-                                 replaced_script, count=1, flags=re.MULTILINE)
+        replaced_script = add_headers(replaced_script, tvm_ks)
         # Seek and truncate are necessary for overwriting the read file
         lib1.seek(0)
         lib1.write(replaced_script)
         lib1.truncate()
-        print(f"Updated file {file_name}")
-    input("Ready for parsing, please start the benchmark on diana")
+        print(f"Updated main file @ {file_name}")
+    input("Ready for parsing GDB output, please start the benchmark on diana")
     results = parse_gdb_log(tvm_ks)
     print(f"Results")
     print(f"=======")
     for i, (name, cycles) in enumerate(results.items()):
-        print(f"{i}) {name: <50} : {cycles}")
+        print(f"{i}) {name: <50} : {int(cycles):,}")
