@@ -2,6 +2,7 @@ import re
 import pathlib
 import datetime
 import glob
+import csv
 
 """
 Regex explanation:
@@ -140,7 +141,7 @@ def parse_gdb_log(file_name = "benchmark.txt"):
         gdb_regex = r"\$\d* = (\d*)"
         entries = re.finditer(gdb_regex, log, flags=re.MULTILINE) 
         # Return only the cycles, not the entire regex match
-        return [i[1] for i in entries]
+        return [int(i[1]) for i in entries]
 
 
 def get_kernels(main_function):
@@ -279,23 +280,46 @@ class DianaResult():
                 longest_length = len(name)
                 longest_string = name
         return longest_string
+
+    def print_total_cycles(self):
+        total = 0
+        tvm_total = 0
+        dory_total = 0
+        dory_setup_total = 0
+        dory_calc_total = 0
+        dory_retr_total = 0
+        results = iter(self.results_string)
+        for name in self.kernel_names:
+            if self.is_dory_kernel(name):
+                setup = next(results)
+                calc = next(results)
+                retr = next(results)
+                total += setup + calc + retr
+                dory_total += setup + calc + retr
+                dory_setup_total += setup
+                dory_calc_total += calc
+                dory_retr_total += retr
+            else:
+                cycles = next(results)
+                total += cycles
+                tvm_total += cycles
+        print("CYCLE RUNDOWN")
+        print(f"Total cycles  {total:12,} (100%)")
+        print(f"- TVM cycles  {tvm_total:12,} ({100 * tvm_total/total:3.1f}%)")
+        print(f"- DORY cycles {dory_total:12,} ({100 * dory_total/total:3.1f}%)")
+        print(f"--- setup     {dory_setup_total:12,} ({100 * dory_setup_total/total:3.1f}%)")
+        print(f"--- calculate {dory_calc_total:12,} ({(100 * dory_calc_total/total):3.1f}%)")
+        print(f"--- retrieve  {dory_retr_total:12,} ({(100 * dory_retr_total/total):3.1f}%)")
     
     @staticmethod
-    def get_dory_number(kernel_name):
-        """
-        Get dory function number or return None if no dory function
-
-        E.g. for "tvmgen_default_soma_dory_main_57", return 57
-             for "tvmgen_default_fused_add4" return None
-        """
+    def is_dory_kernel(kernel_name):
         regex_function = "tvmgen_default_soma_dory_main_(\d*)"
         match_object = re.search(regex_function, kernel_name, 
                                  flags=re.MULTILINE)
         if match_object is not None:
-            return match_object[1]
+            return True
         else:
-            return None
-
+            return False
 
     def pretty_print(self):
         """
@@ -304,16 +328,8 @@ class DianaResult():
         results = iter(self.results_string)
         offset = len(self.__get_longest_name())
         separator = (offset + 30) * "-"
-        i = 0
         for i, name in enumerate(self.kernel_names):
-            name_parsed = self.get_dory_number(name)
-            if name_parsed is None:
-                # This is a TVM kernel
-                cycles = next(results)
-                print(separator)
-                print(f"{i:<3}) {name: <{offset}}         : {int(cycles):,}")
-            else:
-                # This is a Dory kernel
+            if self.is_dory_kernel(name):
                 setup = next(results)
                 calc = next(results)
                 retr = next(results)
@@ -322,15 +338,37 @@ class DianaResult():
                 empty = ""
                 print(f"     {empty:<{offset}} : calc  : {int(calc):,}")
                 print(f"     {empty:<{offset}} : retr  : {int(retr):,}")
+            else:
+                cycles = next(results)
+                print(separator)
+                print(f"{i:<3}) {name: <{offset}}         : {int(cycles):,}")
                 
-
-
+    def write_csv(self, file_name="results.csv"):
+        """
+        Write results to CSV file
+        """
+        results = iter(self.results_string)
+        with open(file_name, "w") as csv_file:
+            writer = csv.writer(csv_file)
+            for name in self.kernel_names:
+                if self.is_dory_kernel(name):
+                    setup = next(results)
+                    calc = next(results)
+                    retr = next(results)
+                    writer.writerow([name + "_setup", setup])
+                    writer.writerow([name + "_calc", calc])
+                    writer.writerow([name + "_retr", retr])
+                else:
+                    cycles = next(results)
+                    writer.writerow([name, cycles])
+                    
      
 if __name__ == "__main__":
     codegen_dir = "./build/codegen/host/src/"
     file_name = codegen_dir + "default_lib1.c"
     gdb_script_name = "./gdb_benchmark.sh"
     gdb_log_name = "./benchmark.txt"
+    csv_file = "benchmark.csv"
     # Update default_lib1.c
     with open(file_name, "r+") as lib1:
         data = lib1.read()
@@ -369,4 +407,8 @@ if __name__ == "__main__":
     result = DianaResult(all_ks, log_results)
     print("-----  RESULTS ------")
     result.pretty_print()
-
+    print("\n")
+    result.print_total_cycles()
+    print("\n")
+    print(f"Exporting CSV results to \"{csv_file}\"")
+    result.write_csv(csv_file)
