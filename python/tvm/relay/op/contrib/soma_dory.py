@@ -1,118 +1,39 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 """
 Operations to support the SOMA accelerator.
 """
 
 import tvm
 import logging
-import numpy as np
-from tvm import relay
 
-from ...expr_functor import ExprMutator
-
-from tvm._ffi import register_func
-from tvm.relay.expr import const
 from tvm.relay import transform
 from tvm.relay.build_module import bind_params_by_name
 #from tvm.driver.tvmc import TVMCException
 
 from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
-from .register import register_pattern_table
 
 # don't remove this import even if it does not seem to be used
 # because this is the point where the soma_dory backend is registered
 import tvm.relay.backend.contrib.soma_dory
+from tvm.relay.backend.contrib.soma_dory.transform import SomaDoryGraphQuantizer, SomaDoryLayoutTransform
+
 
 logger = logging.getLogger("SomaDory")
-
-
-@transform.function_pass(opt_level=0)
-class SomaDoryGraphQuantizer(ExprMutator):
-    """Convert fake-quantized relay graph (from Soma ONNX file) into a real quantized relay graph
-    """
-
-    def __init__(self, dtype):
-        self.dtype = dtype
-        super().__init__()
-
-    def transform_function(self, func, mod, ctx):
-        return self.visit(func)
-
-    def visit_call(self, call):
-        """Rewrite ops
-        """
-        new_fn = self.visit(call.op)
-        new_args = [self.visit(arg) for arg in call.args]
-
-        if call.op.name == 'nn.conv2d':
-            # replace nn.conv2d with qnn.conv2d and quantize weights (assume they are constant)
-            w = relay.const(new_args[1].data.numpy().astype(self.dtype))
-            new_call = relay.qnn.op.conv2d(new_args[0], w,
-                                           relay.const(0),
-                                           relay.const(0),
-                                           relay.const(1.0),
-                                           relay.const(1.0),
-                                           w.data.shape[-2:],
-                                           channels=w.data.shape[0],
-                                           strides=call.attrs.strides,
-                                           padding=call.attrs.padding,
-                                           dilation=call.attrs.dilation,
-                                           groups=call.attrs.groups)
-
-        elif call.op.name == 'nn.bias_add':
-            # quantize bias to int32
-            new_args[1] = relay.const(new_args[1].data.numpy().astype('int32'))
-            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
-
-        elif call.op.name == 'divide':
-            # We currently assume that a divide op represents a requant operations after bias_add or element-wise sum
-            # Since the currently existing 'qnn.op.requantize' does not support floor-based rounding, we construct our
-            # own requantization using a set of primitive relay ops. We expect that the division factor is power-of-two
-            # and therefore our custom requantization is a sequence of these ops: right_shift, clip, cast.
-            shift_factor = int(np.log2(new_args[1].data.numpy()))
-            right_shift = relay.op.right_shift(new_args[0], relay.const(shift_factor))
-            clip = relay.op.clip(right_shift, a_min=-128, a_max=127)
-            new_call = relay.op.cast(clip, self.dtype)
-
-        else:
-            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
-
-        return new_call
-
-    def visit_function(self, fn):
-        """Rewrite function arguments
-        """
-        new_params = []
-        binds = {}
-
-        for param in fn.params:
-            # Get the parameter's type annotation.
-            var_type = param.type_annotation
-
-            # bias params are int32
-            if param.name_hint.endswith('bias'):
-                dtype = 'int32'
-            else:
-                dtype = self.dtype
-
-            # Generate new variable.
-            new_param = relay.var(param.name_hint, shape=var_type.shape, dtype=dtype)
-
-            new_params.append(new_param)
-            binds[param] = new_param
-
-        new_body = self.visit(fn.body)
-        # Rewrite the body to use new parameters.
-        new_body = relay.bind(new_body, binds)
-
-        # Construct the updated function and return.
-        return relay.Function(
-            new_params,
-            new_body,
-            # You could change the return type, if you use None it will re-infer.
-            None,
-            type_params=fn.type_params,
-            attrs=fn.attrs,
-        )
 
 
 def qnn_conv2d_pattern():
@@ -187,7 +108,7 @@ def check_qnn_conv2d(pattern):
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_layout', ['OIHW'])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'data_layout', ['NCHW'])):
 
-       return False
+        return False
 
     #conv2d_input = conv2d.args[0]
     #conv2d_weight = conv2d.args[1]
@@ -229,6 +150,8 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
             transform.InferType(),
             transform.MergeComposite(pattern_table()),
             transform.AnnotateTarget(["soma_dory"]),
+            SomaDoryLayoutTransform(),
+            transform.InferType(),
             transform.PartitionGraph(),
             transform.InferType(),
         ]
