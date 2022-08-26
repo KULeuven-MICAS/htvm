@@ -1,13 +1,18 @@
 #ifndef PULP_RT_MALLOC_WRAPPER_H
 #define PULP_RT_MALLOC_WRAPPER_H
 
+#ifdef PULP
 #include <pulp.h>
-#include <stdint.h>
+#else
+#include <stdlib.h>
+#include <stddef.h>
+#endif
+
 
 
 // Wrappers for pulp rt_user_alloc
-void* malloc_pulp(size_t size);
-void* free_pulp(void* ptr, size_t size);
+void* malloc_wrapped(size_t size);
+void free_wrapped(void* ptr, size_t size);
 // Wrappers for pulp wrappers.
 /* 
  These wrappers store an extra four byte field before

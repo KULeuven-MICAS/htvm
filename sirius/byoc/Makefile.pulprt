@@ -24,7 +24,7 @@ DORY_SRCS = $(wildcard $(abspath $(DORY_DIR))/src/*.c)
 DORY_OBJS = $(subst .c,.o,$(DORY_SRCS))
 DORY_INC_PATH = $(abspath $(DORY_DIR))/include
 
-MALLOC_WRAPPER_SRCS = $(abspath src/pulp_rt_malloc_wrapper.c)
+MALLOC_WRAPPER_SRCS = $(abspath src/malloc_wrapper.c)
 MALLOC_WRAPPER_OBJS = $(subst .c,.o,$(MALLOC_WRAPPER_SRCS))
 
 INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
@@ -38,7 +38,8 @@ PULP_APP = demo
 PULP_APP_SRCS = $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(DORY_SRCS) $(MALLOC_WRAPPER_SRCS) $(abspath src/demo.c) 
 PULP_INC_PATHS += -DSDK
 # Use -DNDEBUG to remove assertions in TVM runtime
-PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS) -DNDEBUG
+# Use -DPULP for preprocessor in malloc wrapper
+PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS) -DNDEBUG -DPULP
 # Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
 # PULP_CFLAGS += -DRUNTIME_SOMA
 

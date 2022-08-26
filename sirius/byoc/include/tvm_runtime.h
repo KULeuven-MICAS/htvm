@@ -22,24 +22,27 @@
 #include <stdlib.h>
 #include <tvm/runtime/c_runtime_api.h>
 #include <tvm/runtime/crt/stack_allocator.h>
+#ifdef PULP
+#include <pulp.h>
+#endif
+#include <malloc_wrapper.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void __attribute__((noreturn)) TVMPlatformAbort(tvm_crt_error_t error_code) {
-  printf("TVMPlatformAbort: %d\n", error_code);
-  printf("EXITTHESIM\n");
+  abort();
   exit(-1);
 }
 
 void* TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
-  *out_ptr = malloc(num_bytes);
+  *out_ptr = malloc_wrapper(num_bytes);
   return 0;
 }
 
 int TVMPlatformMemoryFree(void* ptr, DLDevice dev) {
-  free(ptr);
+  free_wrapper(ptr);
   return 0;
 }
 

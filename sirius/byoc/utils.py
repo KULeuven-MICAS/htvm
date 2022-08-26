@@ -224,37 +224,27 @@ def create_demo_file(mod: tvm.ir.IRModule, target: str = "soma_dory, c",
     print(f"\t {input_shape}")
     print(f"\toutput ({output_dtype}):")
     print(f"\t {output_shape}")
-    if target == "soma_dory, c":
-        malloc_statements =  \
-            """
+    malloc_statements =  \
+        """
         int8_t *input = (int8_t*)malloc_wrapper(input_size * sizeof(int8_t));
         int8_t *output = (int8_t*)malloc_wrapper(output_size * sizeof(int8_t));
         """
-        extra_includes = "#include <pulp.h>\n#include <tvm_runtime_pulp.h>\n#include <pulp_rt_malloc_wrapper.h>\n"
-        free_statements = \
-            """
+    free_statements = \
+        """
         free_wrapper(input);
         free_wrapper(output);
         """
-
+    if target == "soma_dory, c":
+        extra_includes = "#include <pulp.h>"
     else:
-        malloc_statements =  \
-            """
-        int8_t *input = malloc(input_size * sizeof(int8_t));
-        int8_t *output = malloc(output_size * sizeof(int8_t));
-        """
-        extra_includes = "#include <tvm_runtime.h>"
-        free_statements = \
-            """
-        free(input);
-        free(output);
-        """
-
+        extra_includes = ""
     c_code = \
         f"""
 #include <stdio.h>
 #include <stdint.h>
 #include "tvmgen_default.h"
+#include <tvm_runtime.h>
+#include <malloc_wrapper.h>
 {extra_includes}
     """ + \
         """
@@ -295,6 +285,7 @@ int main(int argc, char** argv) {
     with open(path, "w") as file:
         file.writelines(c_code)
 
+
 def parse_cli_options() -> Tuple[str, str]:
     '''
     Utility function that reads arguments from command line
@@ -302,10 +293,11 @@ def parse_cli_options() -> Tuple[str, str]:
     '''
     parser = argparse.ArgumentParser(description="Utility argparser\
                                                   for example scripts")
-    parser.add_argument('--target', dest='target', choices=("soma_dory, c", "c"), 
+    parser.add_argument('--target', dest='target',
+                        choices=("soma_dory, c", "c"),
                         default="soma_dory, c")
     parser.add_argument('--benchmark', dest='measurement',
-                        choices=("individual","global","no_benchmark" ),
+                        choices=("individual", "global", "no_benchmark"),
                         default="no_benchmark")
     args = parser.parse_args()
     return args.target, args.measurement
