@@ -46,7 +46,7 @@ compile_relay_simple_c:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_simple.py --c
+      - python3 relay_simple.py --target="c"
     artifacts:
       paths:
         - sirius/byoc/build
@@ -64,7 +64,47 @@ compile_relay_simple_soma_dory:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_simple.py --soma_dory
+      - python3 relay_simple.py --target="soma_dory, c"
+      - sh copy_dory_files.sh
+    artifacts:
+      paths:
+        - sirius/byoc/dory
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+compile_relay_simple_soma_dory_benchmark_individual:
+    stage: codegen_soma_dory
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_simple.py --target="soma_dory, c" --benchmark="individual"
+      - sh copy_dory_files.sh
+    artifacts:
+      paths:
+        - sirius/byoc/dory
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+compile_relay_simple_soma_dory_benchmark_global:
+    stage: codegen_soma_dory
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_simple.py --target="soma_dory, c" --benchmark="global"
       - sh copy_dory_files.sh
     artifacts:
       paths:
@@ -110,7 +150,7 @@ compile_relay_resnet20_c:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_resnet20.py --c
+      - python3 relay_resnet20.py --target="c"
     artifacts:
       paths:
         - sirius/byoc/build
@@ -128,7 +168,47 @@ compile_relay_resnet20_soma_dory:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_resnet20.py --soma_dory
+      - python3 relay_resnet20.py --target="soma_dory, c"
+      - sh copy_dory_files.sh
+    artifacts:
+      paths:
+        - sirius/byoc/dory
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+compile_relay_resnet20_soma_dory_benchmark_individual:
+    stage: codegen_soma_dory
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_resnet20.py --target="soma_dory, c" --benchmark="individual"
+      - sh copy_dory_files.sh
+    artifacts:
+      paths:
+        - sirius/byoc/dory
+        - sirius/byoc/build
+        - sirius/byoc/include
+        - sirius/byoc/src
+    tags:
+      - podman
+
+compile_relay_resnet20_soma_dory_benchmark_global:
+    stage: codegen_soma_dory
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=`pwd`/python
+      - cd sirius/byoc
+      - python3 relay_resnet20.py --target="soma_dory, c" --benchmark="global"
       - sh copy_dory_files.sh
     artifacts:
       paths:

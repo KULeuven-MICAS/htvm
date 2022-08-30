@@ -249,7 +249,7 @@ int main(int argc, char** argv) {
     with open(path, "w") as file:
         file.writelines(c_code)
 
-def parse_cli_target() -> str:
+def parse_cli_options() -> Tuple[str, str]:
     '''
     Utility function that reads arguments from command line
     usage:
@@ -260,14 +260,10 @@ def parse_cli_target() -> str:
     '''
     parser = argparse.ArgumentParser(description="Utility argparser\
                                                   for example scripts")
-    parser.add_argument('--c', dest='c', action='store_const', 
-                        const=True, default=False)
-    parser.add_argument('--soma_dory', dest='soma_dory', action='store_const',
-                        const=True, default=True)
+    parser.add_argument('--target', dest='target', choices=("soma_dory, c", "c"), 
+                        default="soma_dory, c")
+    parser.add_argument('--benchmark', dest='measurement',
+                        choices=("individual","global","no_benchmark" ),
+                        default="no_benchmark")
     args = parser.parse_args()
-    if args.c == True and args.soma_dory == True:
-        return "c"
-    elif args.soma_dory == True:
-        return "soma_dory, c"
-    else:
-        raise ValueError("Either choose --c or --soma_dory, not both")
+    return args.target, args.measurement
