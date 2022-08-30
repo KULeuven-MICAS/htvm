@@ -2,7 +2,8 @@ from utils import (
         tvmc_compile_and_unpack, 
         relay_soma_conv2d,
         create_demo_file, 
-        parse_cli_target)
+        parse_cli_options)
+from benchmark import create_benchmark
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -63,10 +64,11 @@ def create_model():
 
 
 if __name__ == "__main__":
+    target, measurement = parse_cli_options()
     # create the model
     mod, params = create_model()
     model = TVMCModel(mod, params)
     # compile the model
-    target = parse_cli_target()
     tvmc_compile_and_unpack(model, target=target, fuse_layers=False)
     create_demo_file(mod, target=target)
+    create_benchmark(measurement=measurement)

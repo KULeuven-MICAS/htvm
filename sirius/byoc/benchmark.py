@@ -515,6 +515,9 @@ def create_benchmark(codegen_dir="./build/codegen/host/src/",
                      csv_file="benchmark.csv",
                      interactive=False,
                      measurement="individual"):
+    # Skip early in this case
+    if measurement == "no_benchmark":
+        return
     lib1_file_name = codegen_dir + "default_lib1.c"
     lib0_file_name = codegen_dir + "default_lib0.c"
     # Measurement can be individual or global
