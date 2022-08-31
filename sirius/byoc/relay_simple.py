@@ -2,7 +2,9 @@ from utils import (
         tvmc_compile_and_unpack, 
         relay_soma_conv2d,
         create_demo_file, 
-        parse_cli_options)
+        parse_cli_options,
+        load_or_create_random_array
+        )
 from benchmark import create_benchmark
 import tvm
 import tvm.relay as relay
@@ -20,10 +22,11 @@ def create_model():
     weights_shape = (32, 3, 3, 3)
     #special_data = np.array([[-7,-5,-3,-2,-1,0,1,2,3] for i in range(16*3)])
     #special_data = special_data.reshape(weights_shape).astype(np.int8)
-    special_data = 9 * np.ones(weights_shape, dtype='int8')
+    special_data = load_or_create_random_array("weights.npy",
+                                               weights_shape, np.int8)
     x, params1 = relay_soma_conv2d(x, 'conv1', weights_shape, 
                                    special_data,
-                                   1 * np.ones(weights_shape[0]).astype(np.int32), 
+                                   np.ones(weights_shape[0]).astype(np.int32), 
                                    act=False, shift_bits=4)
    # weights_shape = (32, 16, 3, 3)
    # special_data = np.array([[-1,0,1] for i in range(32*16*3)])
