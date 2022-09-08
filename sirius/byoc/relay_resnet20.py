@@ -101,7 +101,7 @@ if __name__ == "__main__":
                                     stride_in_last=False)
     params.update(params_out)
 
-    x = relay.nn.max_pool2d(x, pool_size=(8,8), strides=(8,8))
+    x = relay.nn.avg_pool2d(x, (8,8))
     x = relay.reshape(x, (1,64))
 
     fc_weights_name = "fc_weights"
