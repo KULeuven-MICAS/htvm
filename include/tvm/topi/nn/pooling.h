@@ -647,7 +647,7 @@ inline Tensor pool_impl_nd(const Tensor& x, const Array<PrimExpr>& kernel_size,
             }
 
             PrimExpr divide_factor = max(num_el, make_const(DataType::Int(32), 1));
-            return div(pool_sum(indices), divide_factor);
+            return tvm::cast(x->dtype, div(pool_sum(indices), divide_factor));
           }
         },
         "tensor", kElementWise);
