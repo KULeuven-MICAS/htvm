@@ -5,10 +5,8 @@ set pagination off
 file build/pulpissimo/demo/demo
 target remote localhost:3333
 load
-break tvmgen_default_run
+break demo.c:33
 c
-n
-n
 set logging file demo.txt
 set logging on
 print /d *output@output_size
