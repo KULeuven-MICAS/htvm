@@ -67,11 +67,16 @@ def create_model():
 
 
 if __name__ == "__main__":
-    target, measurement = parse_cli_options()
+    target, measurement, interactive, fusion, gcc_opt = parse_cli_options()
     # create the model
     mod, params = create_model()
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target=target, fuse_layers=False)
+    tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
     create_demo_file(mod, target=target)
-    create_benchmark(measurement=measurement)
+    fusion_name = "fused" if fusion else "unfused"
+    target_name = "dory" if target == "soma_dory, c" else "c"
+    csv_name = f"relay_simple_{target_name}_{fusion_name}_O{gcc_opt}.csv"
+    create_benchmark(measurement=measurement,
+                    interactive=interactive,
+                    csv_file=csv_name)

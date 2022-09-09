@@ -40,9 +40,11 @@ INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
 PULP_APP = demo
 PULP_APP_SRCS = $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(DORY_SRCS) $(MALLOC_WRAPPER_SRCS) $(BENCHMARK_WRAPPER_SRCS) $(abspath src/demo.c) 
 PULP_INC_PATHS += -DSDK
+# Note that this value can automatically be changed by python scripts:
+OPT_LEVEL = 3
 # Use -DNDEBUG to remove assertions in TVM runtime
 # Use -DPULP for preprocessor in malloc wrapper
-PULP_CFLAGS = -Wall -pedantic -O0 -g $(INC_PATHS) -DNDEBUG -DPULP
+PULP_CFLAGS = -Wall -pedantic -O$(OPT_LEVEL) -g $(INC_PATHS) -DNDEBUG -DPULP
 # Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
 # PULP_CFLAGS += -DRUNTIME_SOMA
 

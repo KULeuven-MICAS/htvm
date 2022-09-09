@@ -76,7 +76,7 @@ def relay_res_layer(input_tensor, name, input_channels, output_channels,
     return x, params
 
 if __name__ == "__main__":
-    target, measurement = parse_cli_options()
+    target, measurement, interactive, fusion, gcc_opt = parse_cli_options()
     # initial setup
     input_shape = (1,3,32,32)
     params = {}
@@ -116,6 +116,11 @@ if __name__ == "__main__":
     print(mod)
     model = TVMCModel(mod, params)
     # compile the model
-    tvmc_compile_and_unpack(model, target=target, fuse_layers=False)
+    tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
     create_demo_file(mod, target=target)
-    create_benchmark(measurement=measurement)
+    fusion_name = "fused" if fusion else "unfused"
+    target_name = "dory" if target == "soma_dory, c" else "c"
+    csv_name = f"relay_resnet20_{target_name}_{fusion_name}_O{gcc_opt}.csv"
+    create_benchmark(measurement=measurement,
+                    interactive=interactive,
+                    csv_file=csv_name)

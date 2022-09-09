@@ -1,6 +1,7 @@
 import pathlib
 import tarfile
 import shutil
+import re
 import os
 import argparse
 import tvm
@@ -286,7 +287,29 @@ int main(int argc, char** argv) {
         file.writelines(c_code)
 
 
-def parse_cli_options() -> Tuple[str, str]:
+def adapt_gcc_opt(makefile_path: str, opt_level: int):
+    '''
+    Adapts this line in a file to change OPT_LEVEL:
+        OPT_LEVEL = 3
+    typically used for makefiles.
+
+    NOTE: Raises runtime error if no alterations were made
+    '''
+    regex = r"(OPT_LEVEL =) (\d)"
+    subst = f"\\1 {opt_level}"
+    with open(makefile_path, "r+") as makefile:
+        makefile_string = makefile.read()
+        replaced_string, subs = re.subn(regex, subst, makefile_string,
+                                        0, re.MULTILINE)
+        if subs != 1:
+            raise RuntimeError("Could not alter makefile opt level")
+        makefile.seek(0)
+        makefile.write(replaced_string)
+        makefile.truncate()
+        print(f"Changed opt_level to {opt_level} @ {makefile_path}")
+
+
+def parse_cli_options() -> Tuple[str, str, bool, bool, int]:
     '''
     Utility function that reads arguments from command line
     usage: see script_name.py -h
@@ -299,5 +322,17 @@ def parse_cli_options() -> Tuple[str, str]:
     parser.add_argument('--benchmark', dest='measurement',
                         choices=("individual", "global", "no_benchmark"),
                         default="no_benchmark")
+    parser.add_argument('--interactive', dest='interactive',
+                        action='store_const', const=True,
+                        default=False)
+    parser.add_argument('--no-fusion', dest='fusion',
+                        action='store_const', const=False,
+                        default=True)
+    parser.add_argument('--gcc-opt', dest='gcc_opt',
+                        choices = (0, 1, 2, 3), type=int,
+                        default=3)
+    parser.add_argument('--makefile', dest='makefile',
+                        default="Makefile.pulprt")
     args = parser.parse_args()
-    return args.target, args.measurement
+    adapt_gcc_opt(args.makefile, args.gcc_opt)
+    return args.target, args.measurement, args.interactive, args.fusion, args.gcc_opt
