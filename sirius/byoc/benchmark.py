@@ -59,28 +59,19 @@ def add_tvm_test_code_in_main(code_string: str):
 
     def add_perf_counter(matchobj):
         nonlocal perf_counter_no
-        setup = "  perf = rt_alloc(RT_ALLOC_L2_CL_DATA, sizeof(rt_perf_t));"
-        before = \
-            "  rt_perf_init(perf);\n" + \
-            "  rt_perf_conf(perf, (1<<RT_PERF_CYCLES));\n" +\
-            "  rt_perf_stop(perf);\n" + \
-            "  rt_perf_start(perf);"
-        after = \
-            "  rt_perf_stop(perf);\n" + \
-            "  rt_perf_save(perf);\n" + \
-            f"  perf_cyc_tvm_{perf_counter_no} = rt_perf_get" + \
-            "(perf, RT_PERF_CYCLES);\n" + \
-            "  rt_perf_reset(perf);"
+        setup = "init_global_perf_counter();\n"
+        before = "start_benchmark();\n"
+        after = f"perf_cyc_tvm_{perf_counter_no} = stop_benchmark();\n"
         # Use perf_counter_no from outside to see if this
         # is the first replacement
         nonlocal first_replacement
         if first_replacement:
             first_replacement = False
             perf_counter_no += 1
-            return setup + before + "  " + matchobj[0] + "\n" + after
+            return setup + "  " + before + "  " + matchobj[0] + "\n  " + after
         else:
             perf_counter_no += 1
-            return before + "  " + matchobj[0] + "  \n" + after
+            return before + "  " + matchobj[0] + "  \n  " + after
     result = re.sub(RE_TVM, add_perf_counter,
                     code_string, count=0, flags=re.MULTILINE)
     return result
@@ -160,17 +151,17 @@ def add_headers(code_string, tvm_kernel_counters):
     """
     This function alters default_lib1.c, it:
     1) includes pulp.h "#include pulp.h"
-    2) globally declares tvm_kernel_counters
+    2) includes pulp.h "#include pulp.h"
+    3) globally declares tvm_kernel_counters
 
     The function returns the altered code string
     """
-    # Add global declaration of perf structure
-    global_counter_decl = "volatile rt_perf_t *perf;\n"
-    # Also declare counter stores for all kernels
+    # declare counter stores for all kernels
+    global_counter_decl = ""
     for kernel_counter in tvm_kernel_counters:
         global_counter_decl += f"int {kernel_counter};\n"
     # Add <<#include "pulp.h">> (only once, hence count=1)
-    replaced_code_string = re.sub(RE_INC, "\\1\n#include \"pulp.h\"\n" +
+    replaced_code_string = re.sub(RE_INC, "\\1\n#include \"pulp.h\"\n#include \"pulp_rt_benchmark_wrapper.h\"\n" +
                                   global_counter_decl, code_string,
                                   count=1, flags=re.MULTILINE)
     return replaced_code_string
