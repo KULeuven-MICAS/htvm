@@ -72,7 +72,7 @@ def add_tvm_test_code_in_main(code_string: str):
         else:
             perf_counter_no += 1
             return before + "  " + matchobj[0] + "\n  "+ after
-    result = re.sub(RE_TVM, add_perf_counter,
+    result = re.sub(RE_BOTH, add_perf_counter,
                     code_string, count=0, flags=re.MULTILINE)
     return result
 
@@ -136,7 +136,8 @@ def parse_gdb_log(file_name="benchmark.txt"):
 
 def get_kernels(main_function):
     tvm_kernels = ["tvmgen_default_" + i[2] for i in
-                   re.finditer(RE_TVM, main_function, flags=re.MULTILINE)]
+                   #re.finditer(RE_TVM, main_function, flags=re.MULTILINE)]
+                   re.finditer(RE_BOTH, main_function, flags=re.MULTILINE)]
     dory_kernels = [i[2] for i in
                     re.finditer(RE_DORY, main_function, flags=re.MULTILINE)]
     all_kernels = ["tvmgen_default_" + i[2] for i in
@@ -355,6 +356,7 @@ class DianaResult():
         regex_function = r"tvmgen_default_soma_dory_main_(\d*)"
         match_object = re.search(regex_function, kernel_name,
                                  flags=re.MULTILINE)
+        return False
         if match_object is not None:
             return True
         else:
@@ -512,7 +514,11 @@ def create_benchmark(codegen_dir="./build/codegen/host/src/",
         k_counters, tvm_k_counters, all_kernels = scan_lib1(lib1_file_name)
         adapt_lib1(lib1_file_name, tvm_k_counters)
         # Update all Dory generated cycle counters in default_lib*.c
-        update_dory_default_libs(codegen_dir, remove=False)
+        #update_dory_default_libs(codegen_dir, remove=False)
+
+        # Overriding TVM dory behaviour
+        k_counters = tvm_k_counters
+        update_dory_default_libs(codegen_dir, remove=True)
     if measurement == "global":
         adapt_lib0(lib0_file_name)
         # Remove all Dory generated cycle counters in default_lib*.c
