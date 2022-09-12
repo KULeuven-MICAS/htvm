@@ -11,5 +11,5 @@ void __attribute__((noinline, optimize("O0"))) init_global_perf_counter();
 void __attribute__((noinline, optimize("O0"))) start_benchmark();
 
 int32_t __attribute__((noinline, optimize("O0"))) stop_benchmark();
-  
+
 #endif // PULP_RT_BENCHMARK_WRAPPER_H

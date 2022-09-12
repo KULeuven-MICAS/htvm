@@ -71,7 +71,7 @@ def add_tvm_test_code_in_main(code_string: str):
             return setup + "  " + before + "  " + matchobj[0] + "\n  " + after
         else:
             perf_counter_no += 1
-            return before + "  " + matchobj[0] + "  \n  " + after
+            return before + "  " + matchobj[0] + "\n  "+ after
     result = re.sub(RE_TVM, add_perf_counter,
                     code_string, count=0, flags=re.MULTILINE)
     return result
@@ -92,7 +92,7 @@ def generate_gdb_script(kernel_counters, logging_file="benchmark.txt",
         "file build/pulpissimo/demo/demo\n" + \
         "target remote localhost:3333\n" + \
         "load\n" + \
-        "break tvmgen_default_run\n" + \
+        "break gdb_anchor\n" + \
         f"set logging file {logging_file}\n" + \
         "set logging on\n"
     if measurement == "individual":
@@ -159,7 +159,7 @@ def add_headers(code_string, tvm_kernel_counters):
     # declare counter stores for all kernels
     global_counter_decl = ""
     for kernel_counter in tvm_kernel_counters:
-        global_counter_decl += f"int {kernel_counter};\n"
+        global_counter_decl += f"volatile int {kernel_counter};\n"
     # Add <<#include "pulp.h">> (only once, hence count=1)
     replaced_code_string = re.sub(RE_INC, "\\1\n#include \"pulp.h\"\n#include \"pulp_rt_benchmark_wrapper.h\"\n" +
                                   global_counter_decl, code_string,
@@ -470,8 +470,8 @@ def adapt_lib0(file_name):
         failsafe_check(data)
         # Add "#include "pulp.h""
         replaced = re.sub(r"(#include \<tvmgen_default\.h\>)",
-                          r"\1\n" + '#include "pulp.h"', data, count=0,
-                          flags=re.MULTILINE)
+                          r"\1\n" + '#include "pulp.h"\n + \#include "pulp_rt_benchmark_wrapper.h"',
+                          data, count=0, flags=re.MULTILINE)
 
         decl = "int perf_cyc;\n"
         alloc = "volatile rt_perf_t *perf;\n" + \
@@ -488,7 +488,7 @@ def adapt_lib0(file_name):
                "rt_perf_reset(perf);\n"
         regex = r"(int32_t tvmgen_default_run\(struct " + \
                 r"tvmgen_default_inputs\* inputs,struct " + \
-                r"tvmgen_default_outputs\*" + \
+                r"tvmgen_default_outputs\* " + \
                 r"outputs\) \{)(.*;\n)(})"
         function = r"int status = tvmgen_default___tvm_main__(" + \
                    r"inputs->input,outputs->output);"

@@ -198,8 +198,7 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
     os.remove(mlf_path)
 
 
-def create_demo_file(mod: tvm.ir.IRModule, target: str = "soma_dory, c",
-                     path: str = "src/demo.c"):
+def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c"):
     '''
     Function that creates a demo file in which inputs and outputs of the
     right size are allocated and setup automatically. Based on:
@@ -235,18 +234,13 @@ def create_demo_file(mod: tvm.ir.IRModule, target: str = "soma_dory, c",
         free_wrapper(input);
         free_wrapper(output);
         """
-    if target == "soma_dory, c":
-        extra_includes = "#include <pulp.h>"
-    else:
-        extra_includes = ""
     c_code = \
-        f"""
-#include <stdio.h>
+        f""" #include <stdio.h>
 #include <stdint.h>
 #include "tvmgen_default.h"
 #include <tvm_runtime.h>
 #include <malloc_wrapper.h>
-{extra_includes}
+#include <gdb_anchor.h>
     """ + \
         """
 int abs(int v) {return v * ((v > 0) - (v < 0)); }
@@ -273,6 +267,7 @@ int main(int argc, char** argv) {
         .input = input,
     };
     int32_t status = tvmgen_default_run(&inputs, &outputs);
+    gdb_anchor();
     """ + \
         free_statements + \
         """

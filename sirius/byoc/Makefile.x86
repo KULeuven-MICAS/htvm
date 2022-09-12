@@ -15,7 +15,6 @@ CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
 CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
 CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
 
-
 # Compiler selection
 CC = gcc
 AR = ar
@@ -46,17 +45,20 @@ $(BUILD_DIR)/malloc_wrapper.o: src/malloc_wrapper.c
 	mkdir -p $(@D)
 	$(CC) -c $(PKG_CFLAGS) -o $@ $^
 
+$(BUILD_DIR)/gdb_anchor.o: src/gdb_anchor.c
+	mkdir -p $(@D)
+	$(CC) -c $(PKG_CFLAGS) -o $@ $^
 
 $(BUILD_DIR)/libcodegen.a: $(CODEGEN_SRCS)
 	cd $(abspath $(BUILD_DIR)/codegen/host/src) && $(CC) -c $(PKG_CFLAGS) $(CODEGEN_SRCS)
 	$(AR) -cr $(abspath $(BUILD_DIR)/libcodegen.a) $(CODEGEN_OBJS)
 	$(RANLIB) $(abspath $(BUILD_DIR)/libcodegen.a)
 
-$(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/libcodegen.a
+$(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/gdb_anchor.o $(BUILD_DIR)/libcodegen.a
 	mkdir -p $(@D)
 	$(CC) $(PKG_CFLAGS) -o  $@ $^
 
 clean:
-	rm -f $(CODEGEN_OBJS) $(MALLOC_WRAPPER_OBJS) $(BUILD_DIR)/demo $(BUILD_DIR)/malloc_wrapper.o
+	rm -f $(CODEGEN_OBJS) $(BUILD_DIR)/demo $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/gdb_anchor.o
 
 
