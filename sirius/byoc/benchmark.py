@@ -95,15 +95,12 @@ def generate_gdb_script(kernel_counters, logging_file="benchmark.txt",
         "break gdb_anchor\n" + \
         f"set logging file {logging_file}\n" + \
         "set logging on\n"
+    body = "c\n" + "n\n"
     if measurement == "individual":
-        body = "c\n" + \
-            "n\n"
         for kernel_counter in kernel_counters:
             body += f"print {kernel_counter}\n"
-    # global measurement
     else:
-        body = "c\n" + \
-            "n\n" * 8 + \
+    # global measurement
             "print perf_cyc\n"
     closing = "set logging off\n" + \
         "quit\n"
@@ -470,29 +467,24 @@ def adapt_lib0(file_name):
         failsafe_check(data)
         # Add "#include "pulp.h""
         replaced = re.sub(r"(#include \<tvmgen_default\.h\>)",
-                          r"\1\n" + '#include "pulp.h"\n + \#include "pulp_rt_benchmark_wrapper.h"',
+                          r"\1\n" + '#include "pulp.h"\n' + \
+                          '#include "pulp_rt_benchmark_wrapper.h"\n',
                           data, count=0, flags=re.MULTILINE)
-
-        decl = "int perf_cyc;\n"
-        alloc = "volatile rt_perf_t *perf;\n" + \
-                "perf = rt_alloc(RT_ALLOC_L2_CL_DATA, " + \
-                "sizeof(rt_perf_t));\n"
-        setup = "rt_perf_init(perf);\n" + \
-                "rt_perf_reset(perf);\n" + \
-                "rt_perf_conf(perf, (1<<RT_PERF_CYCLES));\n" + \
-                "rt_perf_stop(perf);\n" + \
-                "rt_perf_start(perf);\n"
-        stop = "rt_perf_stop(perf);\n" + \
-               "rt_perf_save(perf);\n" + \
-               "perf_cyc = rt_perf_get(perf, RT_PERF_CYCLES);\n" + \
-               "rt_perf_reset(perf);\n"
+        decl = "volatile int perf_cyc;\n"
+        setup = "init_global_perf_counter();\n"
+        before = "start_benchmark();\n"
+        after = "perf_cyc = stop_benchmark();\n"
         regex = r"(int32_t tvmgen_default_run\(struct " + \
                 r"tvmgen_default_inputs\* inputs,struct " + \
                 r"tvmgen_default_outputs\* " + \
                 r"outputs\) \{)(.*;\n)(})"
         function = r"int status = tvmgen_default___tvm_main__(" + \
-                   r"inputs->input,outputs->output);"
-        subst = decl + r"\1\n" + alloc + setup + function + stop + r"\3"
+                   "inputs->input,outputs->output);\n"
+        status = "return status;\n"
+        # whitespace
+        ws= "    "
+        subst = decl + "\n" + r"\1\n" + ws + setup + ws + before + ws + \
+                function + ws + after + ws + status + r"\3" 
         replaced = re.sub(regex, subst, replaced, count=0, flags=re.MULTILINE)
         lib0.seek(0)
         lib0.write(replaced)
@@ -530,20 +522,33 @@ def create_benchmark(codegen_dir="./build/codegen/host/src/",
     with open(gdb_script_name, "w") as gdb_script:
         gdb_script.write(generate_gdb_script(k_counters, gdb_log_name,
                                              measurement=measurement))
-    if interactive and measurement == "individual":
+    if interactive and measurement != "no_benchmark":
         print("Ready for parsing GDB output")
         print("Please run the benchmark on Diana")
         input("Press enter after benchmark...")
         log_results = parse_gdb_log()
-        result = DianaResult(all_kernels, log_results)
-        print("-----  RESULTS ------")
-        result.pretty_print()
-        print("\n")
-        result.print_total_cycles()
-        print("\n")
-        print(f"Exporting CSV results to \"{csv_file}\", exiting")
-        result.write_csv(csv_file)
+        if measurement == "individual":
+            result = DianaResult(all_kernels, log_results)
+            print("\n")
+            print("-----  RESULTS ------")
+            result.pretty_print()
+            print("\n")
+            result.print_total_cycles()
+            print("\n")
+            print(f"Exporting CSV results to \"{csv_file}\", exiting")
+            result.write_csv(csv_file)
+        else:
+            # global measurement
+            global_cycles = log_results[0]
+            print("\n")
+            print("-----  GLOBAL RESULT ------")
+            print(f"Total cycles  {global_cycles:12,} (100%)")
+            print("\n")
+            print(f"Exporting CSV results to \"{csv_file}\", exiting")
+            with open(csv_file, "w") as csv:
+                csv.write(f"{csv_file}_total, {global_cycles}\n")
     else:
+        # non interactive mode
         print("Files are updated, gdb script is generated, exiting")
 
 
