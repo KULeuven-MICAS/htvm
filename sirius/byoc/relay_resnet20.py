@@ -120,7 +120,8 @@ if __name__ == "__main__":
     create_demo_file(mod)
     fusion_name = "fused" if fusion else "unfused"
     target_name = "dory" if target == "soma_dory, c" else "c"
-    csv_name = f"relay_resnet20_{target_name}_{fusion_name}_O{gcc_opt}.csv"
+    csv_name = f"relay_resnet20_{target_name}_{fusion_name}" + \
+               f"_O{gcc_opt}_{measurement}.csv"
     create_benchmark(measurement=measurement,
                     interactive=interactive,
                     csv_file=csv_name)
