@@ -11,7 +11,7 @@ from tvm.driver.tvmc.compiler import compile_model
 from tvm.driver.tvmc.model import TVMCModel
 from tvm.relay.backend import Executor, Runtime
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 import numpy.typing as npt
 
 
@@ -304,7 +304,7 @@ def adapt_gcc_opt(makefile_path: str, opt_level: int):
         print(f"Changed opt_level to {opt_level} @ {makefile_path}")
 
 
-def parse_cli_options() -> Tuple[str, str, bool, bool, int]:
+def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
     '''
     Utility function that reads arguments from command line
     usage: see script_name.py -h
@@ -314,9 +314,9 @@ def parse_cli_options() -> Tuple[str, str, bool, bool, int]:
     parser.add_argument('--target', dest='target',
                         choices=("soma_dory, c", "c"),
                         default="soma_dory, c")
-    parser.add_argument('--benchmark', dest='measurement',
-                        choices=("individual", "global", "no_benchmark"),
-                        default="no_benchmark")
+    parser.add_argument('--profile', dest='measurement',
+                        choices=("individual", "global", None),
+                        default=None)
     parser.add_argument('--interactive', dest='interactive',
                         action='store_const', const=True,
                         default=False)

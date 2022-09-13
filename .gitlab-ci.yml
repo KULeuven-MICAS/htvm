@@ -75,7 +75,7 @@ compile_relay_simple_soma_dory:
     tags:
       - podman
 
-compile_relay_simple_soma_dory_benchmark_individual:
+compile_relay_simple_soma_dory_profile_individual:
     stage: codegen_soma_dory
     image: $CI_REGISTRY_IMAGE:latest
     dependencies: 
@@ -84,7 +84,7 @@ compile_relay_simple_soma_dory_benchmark_individual:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_simple.py --target="soma_dory, c" --benchmark="individual"
+      - python3 relay_simple.py --target="soma_dory, c" --profile="individual"
       - sh copy_dory_files.sh
     artifacts:
       paths:
@@ -95,7 +95,7 @@ compile_relay_simple_soma_dory_benchmark_individual:
     tags:
       - podman
 
-compile_relay_simple_soma_dory_benchmark_global:
+compile_relay_simple_soma_dory_profile_global:
     stage: codegen_soma_dory
     image: $CI_REGISTRY_IMAGE:latest
     dependencies: 
@@ -104,7 +104,7 @@ compile_relay_simple_soma_dory_benchmark_global:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_simple.py --target="soma_dory, c" --benchmark="global"
+      - python3 relay_simple.py --target="soma_dory, c" --profile="global"
       - sh copy_dory_files.sh
     artifacts:
       paths:
@@ -179,7 +179,7 @@ compile_relay_resnet20_soma_dory:
     tags:
       - podman
 
-compile_relay_resnet20_soma_dory_benchmark_individual:
+compile_relay_resnet20_soma_dory_profile_individual:
     stage: codegen_soma_dory
     image: $CI_REGISTRY_IMAGE:latest
     dependencies: 
@@ -188,7 +188,7 @@ compile_relay_resnet20_soma_dory_benchmark_individual:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_resnet20.py --target="soma_dory, c" --benchmark="individual"
+      - python3 relay_resnet20.py --target="soma_dory, c" --profile="individual"
       - sh copy_dory_files.sh
     artifacts:
       paths:
@@ -199,7 +199,7 @@ compile_relay_resnet20_soma_dory_benchmark_individual:
     tags:
       - podman
 
-compile_relay_resnet20_soma_dory_benchmark_global:
+compile_relay_resnet20_soma_dory_profile_global:
     stage: codegen_soma_dory
     image: $CI_REGISTRY_IMAGE:latest
     dependencies: 
@@ -208,7 +208,7 @@ compile_relay_resnet20_soma_dory_benchmark_global:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
       - cd sirius/byoc
-      - python3 relay_resnet20.py --target="soma_dory, c" --benchmark="global"
+      - python3 relay_resnet20.py --target="soma_dory, c" --profile="global"
       - sh copy_dory_files.sh
     artifacts:
       paths:

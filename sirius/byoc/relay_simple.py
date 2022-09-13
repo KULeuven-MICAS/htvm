@@ -5,7 +5,7 @@ from utils import (
         parse_cli_options,
         load_or_create_random_array
         )
-from benchmark import create_benchmark
+from profile import insert_profiler
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -78,6 +78,6 @@ if __name__ == "__main__":
     target_name = "dory" if target == "soma_dory, c" else "c"
     csv_name = f"relay_simple_{target_name}_{fusion_name}" + \
                f"_O{gcc_opt}_{measurement}.csv"
-    create_benchmark(measurement=measurement,
+    insert_profiler(measurement=measurement,
                     interactive=interactive,
                     csv_file=csv_name)

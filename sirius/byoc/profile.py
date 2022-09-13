@@ -23,8 +23,8 @@ def add_tvm_test_code_in_main(code_string: str):
         """
         nonlocal perf_counter_no
         setup = "init_global_perf_counter();\n"
-        before = "start_benchmark();\n"
-        after = f"perf_cyc_tvm_{perf_counter_no} = stop_benchmark();\n"
+        before = "start_perf_counter();\n"
+        after = f"perf_cyc_tvm_{perf_counter_no} = stop_perf_counter();\n"
         # Use perf_counter_no from outside to see if this
         # is the first replacement
         nonlocal first_replacement
@@ -41,7 +41,7 @@ def add_tvm_test_code_in_main(code_string: str):
     return result, kernels
 
 
-def generate_gdb_script(kernel_counters, logging_file="benchmark.txt",
+def generate_gdb_script(kernel_counters, logging_file="profile.txt",
                         measurement="individual"):
     """
     This code will generate gdb script which will print every performance
@@ -49,7 +49,7 @@ def generate_gdb_script(kernel_counters, logging_file="benchmark.txt",
     the global variables.
     """
     preamble = \
-        "!rm benchmark.txt\n" + \
+        "!rm profile.txt\n" + \
         "set print elements 0\n" + \
         "set print repeats 0\n" + \
         "set pagination off\n" + \
@@ -71,7 +71,7 @@ def generate_gdb_script(kernel_counters, logging_file="benchmark.txt",
     return preamble + body + closing
 
 
-def parse_gdb_log(file_name="benchmark.txt"):
+def parse_gdb_log(file_name="profile.txt"):
     with open(file_name, "r") as log_file:
         log = log_file.read()
         gdb_regex = r"\$\d* = (\d*)"
@@ -103,7 +103,7 @@ def add_headers(code_string, kernel_counters):
     """
     re_header = r"(#include (?:\"|<).*(?:\"|>))"
     sub_header = "\\1\n#include \"pulp.h\"\n" + \
-                 "#include \"pulp_rt_benchmark_wrapper.h\"\n" + \
+                 "#include \"pulp_rt_profiler_wrapper.h\"\n" + \
                  global_counter_decl
     replaced_code_string = re.sub(re_header, sub_header, code_string, count=1,
                                   flags=re.MULTILINE)
@@ -307,12 +307,12 @@ def adapt_lib0(file_name):
         # Add "#include "pulp.h""
         replaced = re.sub(r"(#include \<tvmgen_default\.h\>)",
                           r"\1\n" + '#include "pulp.h"\n' + \
-                          '#include "pulp_rt_benchmark_wrapper.h"\n',
+                          '#include "pulp_rt_profiler_wrapper.h"\n',
                           data, count=0, flags=re.MULTILINE)
         decl = "volatile int perf_cyc;\n"
         setup = "init_global_perf_counter();\n"
-        before = "start_benchmark();\n"
-        after = "perf_cyc = stop_benchmark();\n"
+        before = "start_perf_counter();\n"
+        after = "perf_cyc = stop_perf_counter();\n"
         regex = r"(int32_t tvmgen_default_run\(struct " + \
                 r"tvmgen_default_inputs\* inputs,struct " + \
                 r"tvmgen_default_outputs\* " + \
@@ -331,14 +331,14 @@ def adapt_lib0(file_name):
         print(f"Updated lib0 file @ {file_name}")
 
 
-def create_benchmark(codegen_dir="./build/codegen/host/src/",
-                     gdb_script_name="./gdb_benchmark.sh",
-                     gdb_log_name="./benchmark.txt",
-                     csv_file="benchmark.csv",
-                     interactive=False,
-                     measurement="individual"):
+def insert_profiler(codegen_dir="./build/codegen/host/src/",
+                    gdb_script_name="./gdb_profiler.sh",
+                    gdb_log_name="./profile.txt",
+                    csv_file="profile.csv",
+                    interactive=False,
+                    measurement="individual"):
     # Skip early in this case
-    if measurement == "no_benchmark":
+    if measurement == None:
         return
     lib1_file_name = codegen_dir + "default_lib1.c"
     lib0_file_name = codegen_dir + "default_lib0.c"
@@ -356,10 +356,10 @@ def create_benchmark(codegen_dir="./build/codegen/host/src/",
     with open(gdb_script_name, "w") as gdb_script:
         gdb_script.write(generate_gdb_script(kernel_counters, gdb_log_name,
                                              measurement=measurement))
-    if interactive and measurement != "no_benchmark":
+    if interactive and measurement is not None:
         print("Ready for parsing GDB output")
-        print("Please run the benchmark on Diana")
-        input("Press enter after benchmark...")
+        print("Please run to start profiling on Diana")
+        input("Press enter after profiling run...")
         log_results = parse_gdb_log()
         if measurement == "individual":
             result = DianaResult(kernels, log_results)
@@ -383,4 +383,4 @@ def create_benchmark(codegen_dir="./build/codegen/host/src/",
 
 
 if __name__ == "__main__":
-    create_benchmark()
+    insert_profiler()
