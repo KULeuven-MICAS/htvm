@@ -89,15 +89,23 @@ def bar_plot_total(names, cycle_counts, relative=True):
 
 
 def bar_plot_individual(names, cycle_counts, log=True):
-    names = preprocess_names(names)
+    def get_opacity(name):
+        if "soma_dory_main" in name:
+            return 1
+        else:
+            return 0.5
+
     # ! bar chart is horizontal
     data = []
     for i, opt_level in enumerate(["O0","O1","O2","O3"]):
+    # Use customdata to access full names on hover
         data.append(go.Bar(
                            x=cycle_counts[i],
-                           y=names,
+                           y=make_names_unique(names),
+                           customdata=names,
                            name=opt_level,
                            orientation="h",
+                           marker={'opacity': [get_opacity(name) for name in names]}
                            ))
     # Specify autorange reversed to put first executed kernel at top
     # (Default is to put first executed kernel at bottom)
@@ -116,7 +124,23 @@ def bar_plot_individual(names, cycle_counts, log=True):
                       barmode="group", font_family="Droid Sans Mono",
                       xaxis_title=x_title, yaxis_title="Kernel",
                       legend_title="GCC Optimization Level")
+    # Add full name on hover
+    fig.update_traces(hovertemplate = "<b>full name:</b> %{customdata}<br><b>cycles:</b>     %{x}")
+    # Shorten display names
+    fig.update_layout(yaxis={
+                        'tickmode': 'array',
+                        'tickvals': list(range(len(names))),
+                        'ticktext': preprocess_names(names),
+                        },
+                     )
     fig.write_html("bar_plot.html", auto_open=True)
+
+
+def make_names_unique(names):
+    # This is often necessary to make sure plotly doesn't
+    # Stack the wrong data on top of each other
+    names = [f"{i}_{name}" for i, name in enumerate(names)]
+
 
 if __name__ == "__main__":
     names, cycle_counts_O0 = get_values("results/relay_resnet20_dory_fused_O0_individual.csv")
@@ -124,6 +148,6 @@ if __name__ == "__main__":
     names, cycle_counts_O2 = get_values("results/relay_resnet20_dory_fused_O2_individual.csv")
     names, cycle_counts_O3 = get_values("results/relay_resnet20_dory_fused_O3_individual.csv")
     cycle_counts = [cycle_counts_O0, cycle_counts_O1, cycle_counts_O2, cycle_counts_O3]
-    bar_plot_total(names, cycle_counts)
-    #bar_plot_individual(names, cycle_counts)
+    bar_plot_total(names, cycle_counts, relative=False)
+    bar_plot_individual(names, cycle_counts, log=True)
     
