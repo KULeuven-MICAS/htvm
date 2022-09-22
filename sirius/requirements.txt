@@ -9,3 +9,6 @@ pytest
 # for tensorflow lite models
 tflite == 2.1.0
 
+# for plotting
+plotly
+
