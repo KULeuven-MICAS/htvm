@@ -146,7 +146,24 @@ def merge_figures(figures, path="plot.html"):
         include_plotlyjs = False
     with open(path, "w") as plot:
         plot.write(html_string)
-    
+
+def annotate_speedup(figure, values, labels):
+    values = cycle_counts_global
+    labels = ["O0","O1","O2","O3"]
+    diffs = [max(values) - v for v in values]
+    speedup = [max(values)/v for v in values]
+    diff_labels = dict(zip(labels, diffs))
+    i = 0
+    for key, value in diff_labels.items():
+        if value != 0:
+            figure.add_annotation(x=key, y=max(values)-value, ax=0, yanchor='bottom',
+                                ay=max(values), ayref='y', showarrow=True,
+                                arrowsize=2, arrowhead=1, text=f"-{value} ({speedup[i]:.1f}x)")
+        i += 1
+    figure.add_traces(go.Scatter(x=labels, y=[max(values)]*len(labels), mode = 'lines',
+                   line=dict(color='black', width=1))) 
+    return figure
+
 
 if __name__ == "__main__":
     names = []
@@ -157,7 +174,8 @@ if __name__ == "__main__":
     tvm_list = []
     tvm_rel_list = []
     tot_list = []
-    template = "results/relay_resnet20_dory_fused_{}_{}.csv"
+    template = "results_group_x86/relay_groupconv_dory_fused_{}_{}.csv"
+    plot_path = "results_group_x86/plot_x86.html"
     for opt_level in ["O0","O1","O2","O3"]:
         # Get individual counts
         names, cycle_counts = get_values(template.format(opt_level,"individual"))
@@ -208,20 +226,7 @@ if __name__ == "__main__":
                                   fig_title="Global Performance Improvement Chart - GCC Optimization",
                                   legend_title="Measurement", legend=False,
                                   percentage=False)
-    values = cycle_counts_global
-    labels = ["O0","O1","O2","O3"]
-    diffs = [max(values) - v for v in values]
-    speedup = [max(values)/v for v in values]
-    diff_labels = dict(zip(labels, diffs))
-    i = 0
-    for key, value in diff_labels.items():
-        if value != 0:
-            glob_fig.add_annotation(x=key, y=max(values)-value, ax=0, yanchor='bottom',
-                                ay=max(values), ayref='y', showarrow=True,
-                                arrowsize=2, arrowhead=1, text=f"-{value} ({speedup[i]:.1f}x)")
-        i += 1
-    glob_fig.add_traces(go.Scatter(x=labels, y=[max(values)]*len(labels), mode = 'lines',
-                   line=dict(color='black', width=1))) 
+    annotate_speedup(glob_fig, cycle_counts_global, ["O0","O1","O2","O3"])
     figures.append(glob_fig)
-    merge_figures(figures)
+    merge_figures(figures, path=plot_path)
     
