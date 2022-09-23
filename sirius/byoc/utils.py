@@ -147,6 +147,9 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
     '''
     # Check arguments
     assert ((target == "soma_dory, c") or (target == "c"))
+    # Add -device=arm_cpu as default device for TVM C codegen
+    # This will use the arm_cpu relay strategy as opposed to the x86 one.
+    target += " -device=arm_cpu"
     # This has to be set by default to use the C runtime
     pass_context_configs = ['tir.disable_vectorize=1']
     if not fuse_layers:
