@@ -15,7 +15,7 @@ build_container:
     script:
       - sudo podman login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
       - sudo podman pull $CI_REGISTRY_IMAGE:latest || true
-      - sudo podman build --cache-from $CI_REGISTRY_IMAGE --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:latest -f sirius/docker/Dockerfile.tvm .
+      - sudo podman build --cache-from $CI_REGISTRY_IMAGE --tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:latest -f diana/docker/Dockerfile.tvm .
       - sudo podman push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
       - sudo podman push $CI_REGISTRY_IMAGE:latest
     tags:
@@ -26,7 +26,7 @@ build_tvm_release:
     image: $CI_REGISTRY_IMAGE:latest
     script:
       - mkdir build
-      - cp sirius/config.cmake build
+      - cp diana/config.cmake build
       - cd build
       - cmake ..
       - make -j 10
@@ -45,13 +45,13 @@ compile_relay_simple_c:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_simple.py --target="c"
     artifacts:
       paths:
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -63,15 +63,15 @@ compile_relay_simple_soma_dory:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_simple.py --target="soma_dory, c"
       - sh copy_dory_files.sh
     artifacts:
       paths:
-        - sirius/byoc/dory
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/dory
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -83,15 +83,15 @@ compile_relay_simple_soma_dory_profile_individual:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_simple.py --target="soma_dory, c" --profile="individual"
       - sh copy_dory_files.sh
     artifacts:
       paths:
-        - sirius/byoc/dory
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/dory
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -103,15 +103,15 @@ compile_relay_simple_soma_dory_profile_global:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_simple.py --target="soma_dory, c" --profile="global"
       - sh copy_dory_files.sh
     artifacts:
       paths:
-        - sirius/byoc/dory
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/dory
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -122,11 +122,11 @@ build_relay_simple_c:
     dependencies:
       - compile_relay_simple_c
     script:
-      - cd sirius/byoc
+      - cd diana/byoc
       - make -f Makefile.x86 all
     artifacts:
       paths:
-        - sirius/byoc/build/demo
+        - diana/byoc/build/demo
     tags:
       - podman
 
@@ -136,7 +136,7 @@ run_relay_simple_c:
     dependencies:
       - build_relay_simple_c
     script:
-      - sirius/byoc/build/demo
+      - diana/byoc/build/demo
     tags:
       - podman
 
@@ -149,13 +149,13 @@ compile_relay_resnet20_c:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_resnet20.py --target="c"
     artifacts:
       paths:
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -167,15 +167,15 @@ compile_relay_resnet20_soma_dory:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_resnet20.py --target="soma_dory, c"
       - sh copy_dory_files.sh
     artifacts:
       paths:
-        - sirius/byoc/dory
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/dory
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -187,15 +187,15 @@ compile_relay_resnet20_soma_dory_profile_individual:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_resnet20.py --target="soma_dory, c" --profile="individual"
       - sh copy_dory_files.sh
     artifacts:
       paths:
-        - sirius/byoc/dory
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/dory
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -207,15 +207,15 @@ compile_relay_resnet20_soma_dory_profile_global:
     script:
       - export TVM_HOME=`pwd`
       - export PYTHONPATH=`pwd`/python
-      - cd sirius/byoc
+      - cd diana/byoc
       - python3 relay_resnet20.py --target="soma_dory, c" --profile="global"
       - sh copy_dory_files.sh
     artifacts:
       paths:
-        - sirius/byoc/dory
-        - sirius/byoc/build
-        - sirius/byoc/include
-        - sirius/byoc/src
+        - diana/byoc/dory
+        - diana/byoc/build
+        - diana/byoc/include
+        - diana/byoc/src
     tags:
       - podman
 
@@ -226,11 +226,11 @@ build_relay_resnet20_c:
     dependencies:
       - compile_relay_resnet20_c
     script:
-      - cd sirius/byoc
+      - cd diana/byoc
       - make -f Makefile.x86 all
     artifacts:
       paths:
-        - sirius/byoc/build/demo
+        - diana/byoc/build/demo
     tags:
       - podman
 
@@ -240,6 +240,6 @@ run_relay_resnet20_c:
     dependencies:
       - build_relay_resnet20_c
     script:
-      - sirius/byoc/build/demo
+      - diana/byoc/build/demo
     tags:
       - podman
