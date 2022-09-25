@@ -1,0 +1,29 @@
+FROM registry.gitlab.com/soma_compiler/tvm-fork:latest
+
+# install dependencies for pulp toolchain
+RUN pip install prettytable pyelftools jupyterlab
+# install curl and get precompiled pulp-riscv-gnu-toolchain from github
+RUN apt-get update && apt-get install curl -y &&\
+    mkdir /pulp-riscv-gnu-toolchain &&\
+    curl -L https://github.com/pulp-platform/pulp-riscv-gnu-toolchain/releases/download/v1.0.16/v1.0.16-pulp-riscv-gcc-ubuntu-18.tar.bz2 --output /pulp-riscv-gnu-toolchain/gcc.tar.bz2 -s &&\ 
+    cd /pulp-riscv-gnu-toolchain &&\
+    tar xvjf gcc.tar.bz2 --strip-components=1; exit 0 &&\
+    rm /pulp-riscv-gnu-toolchain/gcc.tar.bz2
+
+# copy from local file system the pulp sdk for diana
+COPY pulp-sdk-diana /pulp-sdk-diana
+# Add source commands to bashrc so they are executed for every newly spawned terminal
+RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\ 
+    echo "cd /pulp-sdk-diana/pkg/sdk/dev" >> /etc/bash.bashrc &&\
+    echo "source sourceme.sh" >> /etc/bash.bashrc &&\
+    echo "source configs/pulpissimo.sh" >> /etc/bash.bashrc &&\
+    echo "source configs/platform-rtl.sh" >> /etc/bash.bashrc &&\
+    echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
+    echo "alias python=python3" >> /etc/bash.bashrc
+# set SHELL environment variable to bin bash so jupyter terminal uses bash instead of sh
+ENV SHELL=/bin/bash
+# Start up jupyter from the /tvm-fork folder
+WORKDIR /tvm-fork
+# Start up jupyterlab when starting the container
+# Bind jupyterlab ip to 0.0.0.0 to prevent connection was reset error
+CMD jupyter-lab --allow-root --ip=0.0.0.0
