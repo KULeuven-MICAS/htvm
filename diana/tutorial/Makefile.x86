@@ -1,0 +1,8 @@
+all: helloworld
+
+helloworld:
+	gcc helloworld.c -o helloworld
+
+.PHONY: clean
+clean:
+	rm -f helloworld
