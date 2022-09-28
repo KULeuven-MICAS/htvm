@@ -1,0 +1,14 @@
+# gdb_anchor is an empty function which can be found in the following directory
+ANCHOR_DIR=../byoc
+
+all: gdb_anchor helloworld_gdb
+
+gdb_anchor:
+	gcc -c $(ANCHOR_DIR)/src/gdb_anchor.c -I $(ANCHOR_DIR)/include/
+    
+helloworld_gdb:
+	gcc helloworld_gdb.c -I $(ANCHOR_DIR)/include -o helloworld_gdb gdb_anchor.o
+
+.PHONY: clean
+clean:
+	rm -f helloworld_gdb gdb_anchor.o
