@@ -20,6 +20,9 @@ RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\
     echo "source configs/platform-rtl.sh" >> /etc/bash.bashrc &&\
     echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
     echo "alias python=python3" >> /etc/bash.bashrc
+
+# install requirements for quantlib
+RUN pip install torch torchvision networkx onnx onnxruntime
 # set SHELL environment variable to bin bash so jupyter terminal uses bash instead of sh
 ENV SHELL=/bin/bash
 # Start up jupyter from the /tvm-fork folder
