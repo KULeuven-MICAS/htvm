@@ -314,20 +314,26 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
                                                   for example scripts")
     parser.add_argument('--target', dest='target',
                         choices=("soma_dory, c", "c"),
+                        help="Target string to pass onto TVMC, '-device=arm_cpu' is added to the string later",
                         default="soma_dory, c")
     parser.add_argument('--profile', dest='measurement',
+                        help="Insert PULP performance counters into generated C code; for each individual kernel, for the entire TVM artefact, or don't insert performance counters (default)",
                         choices=("individual", "global", None),
                         default=None)
     parser.add_argument('--interactive', dest='interactive',
                         action='store_const', const=True,
+                        help="Wait for user input to have performed measurement to parse profiler results",
                         default=False)
     parser.add_argument('--no-fusion', dest='fusion',
+                        help="Set TVM's Relay Fusion pass maximum fusion depth to 0",
                         action='store_const', const=False,
                         default=True)
     parser.add_argument('--gcc-opt', dest='gcc_opt',
                         choices = (0, 1, 2, 3), type=int,
+                        help="Set the gcc optimization level in pulprt makefile, (default Makefile.pulprt)",
                         default=3)
     parser.add_argument('--makefile', dest='makefile',
+                        help="Set different path for pulprt makefile (default ./Makefile.pulprt)",
                         default="Makefile.pulprt")
     args = parser.parse_args()
     adapt_gcc_opt(args.makefile, args.gcc_opt)
