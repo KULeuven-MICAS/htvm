@@ -1,0 +1,65 @@
+################################### METADATA ###################################
+
+# Contributors: Vincent Tableau Roche
+# Contacts: vincent.tableau@esat.kuleuven.be
+# Creation Date: 2021-03-02
+# Language: Makefile
+
+################################### ALIASES ####################################
+
+BUILD_DIR := build
+DORY_DIR := dory
+APP_DIR := app
+# Include paths
+STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime
+CODEGEN_PATH := $(abspath $(BUILD_DIR))/codegen
+
+# Sources
+STANDALONE_CRT_SRCS := $(STANDALONE_CRT_PATH)/src/runtime/crt/common/crt_backend_api.c
+STANDALONE_CRT_SRCS += $(STANDALONE_CRT_PATH)/src/runtime/crt/memory/stack_allocator.c
+
+CODEGEN_SRCS = $(wildcard $(abspath $(BUILD_DIR))/codegen/host/src/*.c)
+CODEGEN_OBJS = $(subst .c,.o,$(CODEGEN_SRCS))
+
+DORY_SRCS = $(wildcard $(abspath $(DORY_DIR))/src/*.c)
+DORY_OBJS = $(subst .c,.o,$(DORY_SRCS))
+DORY_INC_PATH = $(abspath $(DORY_DIR))/include
+
+MALLOC_WRAPPER_SRCS = $(abspath $(APP_DIR)/src/malloc_wrapper.c)
+MALLOC_WRAPPER_OBJS = $(subst .c,.o,$(MALLOC_WRAPPER_SRCS))
+
+GDB_ANCHOR_SRCS = $(abspath $(APP_DIR)/src/gdb_anchor.c)
+GDB_ANCHOR_OBJS = $(subst .c,.o,$(GDB_ANCHOR_SRCS))
+
+PROFILER_WRAPPER_SRCS = $(abspath $(APP_DIR)/src/pulp_rt_profiler_wrapper.c)
+PROFILER_WRAPPER_OBJS = $(subst .c,.o,$(PROFILER_WRAPPER_SRCS))
+
+INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
+			 -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
+			 -I${CODEGEN_PATH}/host/include \
+			 -I${APP_DIR}/include \
+			 -I${DORY_INC_PATH}
+
+# Defining the source files for pulp-runtime
+PULP_APP = demo
+PULP_APP_SRCS = $(STANDALONE_CRT_SRCS) $(CODEGEN_SRCS) $(DORY_SRCS) $(MALLOC_WRAPPER_SRCS) $(PROFILER_WRAPPER_SRCS) $(GDB_ANCHOR_SRCS) $(abspath $(APP_DIR)/src/demo.c) 
+PULP_INC_PATHS += -DSDK
+# Note that this value can automatically be changed by python scripts:
+OPT_LEVEL = 3
+# Use -DNDEBUG to remove assertions in TVM runtime
+# Use -DPULP for preprocessor in malloc wrapper
+PULP_CFLAGS = -Wall -pedantic -O$(OPT_LEVEL) -g $(INC_PATHS) -DNDEBUG -DPULP
+# Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
+# PULP_CFLAGS += -DRUNTIME_SOMA
+
+################################### SPECIAL ####################################
+
+# The special rule modifiers (.PHONY etc...) go here
+
+#################################### RULES #####################################
+
+$(info $$STANDALONE_CRT_SRCS is [$(STANDALONE_CRT_SRCS)])
+
+include $(PULP_SDK_HOME)/install/rules/pulp.mk
+
+##################################### EOF ######################################

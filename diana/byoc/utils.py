@@ -130,12 +130,11 @@ def load_or_create_random_array(file_name: str, shape: Tuple[int, ...],
     except FileNotFoundError:
         print(f"\"{file_name}\" doesn't exist")
         array = create_and_store()
-    print(array)
     return array
 
 
 def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
-                 fuse_layers: bool = True):
+                 fuse_layers: bool = True, package_path: str = "model.tar"):
     '''
     Utility wrapper for TVMC that sets supported
     :param model: TVMC model that you wish to compile
@@ -162,7 +161,7 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
                                     ),
                   runtime=Runtime("crt"),
                   output_format="mlf",
-                  package_path="./build/model.tar",
+                  package_path=package_path,
                   pass_context_configs=pass_context_configs,
                   )
 
@@ -192,8 +191,8 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
         # If no build folder exists create one
         path.mkdir()
     # Compile new model
-    tvmc_wrapper(model, target, fuse_layers)
-    mlf_path = pathlib.Path("./build/model.tar")
+    mlf_path = path / "model.tar"
+    tvmc_wrapper(model, target, fuse_layers, mlf_path)
     # extract mlf file
     mlf = tarfile.TarFile(mlf_path)
     mlf.extractall(path)
@@ -280,7 +279,6 @@ int main(int argc, char** argv) {
     return 0;
 }
     """
-    print(c_code)
     with open(path, "w") as file:
         file.writelines(c_code)
 
