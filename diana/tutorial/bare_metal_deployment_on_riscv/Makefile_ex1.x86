@@ -1,0 +1,14 @@
+APP_DIR := app
+BUILD_DIR := my_build
+
+all: helloworld
+
+build_dir:
+	mkdir -p $(BUILD_DIR)
+
+helloworld: build_dir
+	gcc $(APP_DIR)/src/helloworld.c -o $(BUILD_DIR)/helloworld
+
+.PHONY: clean build_dir
+clean:
+	rm -rf $(BUILD_DIR)

@@ -1,12 +1,12 @@
-ANCHOR_DIR := ../byoc/
-GDB_ANCHOR_SRCS = $(abspath $(ANCHOR_DIR)src/gdb_anchor.c)
+APP_DIR := app
+GDB_ANCHOR_SRCS = $(abspath $(APP_DIR)/src/gdb_anchor.c)
 GDB_ANCHOR_OBJS = $(subst .c,.o,$(GDB_ANCHOR_SRCS))
-INC_PATHS = -I$(ANCHOR_DIR)/include
+INC_PATHS = -I$(APP_DIR)/include
              
 # Definitions below have a special meaning for the PULPissimo Makefile wrapper 
-BUILD_DIR := build
+BUILD_DIR := $(abspath my_build)
 PULP_APP = helloworld_gdb_app
-PULP_APP_SRCS = $(abspath helloworld_gdb.c)  $(GDB_ANCHOR_SRCS)
+PULP_APP_SRCS = $(abspath $(APP_DIR)/src/helloworld_gdb.c)  $(GDB_ANCHOR_SRCS)
 PULP_INC_PATHS += -DSDK
 PULP_CFLAGS = -Wall -pedantic -O0 -g  $(INC_PATHS)
 

@@ -1,0 +1,17 @@
+APP_DIR := app
+BUILD_DIR := my_build
+
+all: gdb_anchor helloworld_gdb
+
+build_dir:
+	mkdir -p $(BUILD_DIR)
+
+gdb_anchor: build_dir
+	gcc -c $(APP_DIR)/src/gdb_anchor.c -I $(ANCHOR_DIR)/include/ -o $(BUILD_DIR)/gdb_anchor.o
+    
+helloworld_gdb: build_dir
+	gcc $(APP_DIR)/src/helloworld_gdb.c -I $(APP_DIR)/include -o $(BUILD_DIR)/helloworld_gdb $(BUILD_DIR)/gdb_anchor.o
+
+.PHONY: clean build_dir
+clean:
+	rm -rf $(BUILD_DIR)
