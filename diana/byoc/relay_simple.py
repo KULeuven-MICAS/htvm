@@ -5,7 +5,7 @@ from utils import (
         parse_cli_options,
         load_or_create_random_array
         )
-from profile import insert_profiler
+from profiler import insert_profiler
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform

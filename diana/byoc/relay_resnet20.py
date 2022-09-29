@@ -4,7 +4,7 @@ from utils import (
                    create_demo_file,
                    parse_cli_options
                   )
-from profile import insert_profiler
+from profiler import insert_profiler
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
