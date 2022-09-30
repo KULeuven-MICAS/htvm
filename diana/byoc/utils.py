@@ -20,6 +20,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                       w_value: npt.NDArray[np.int8],
                       b_value: npt.NDArray[np.int32],
                       strides: Tuple[int, ...] = (1, 1),
+                      groups: int = 1,
                       act: bool = False,
                       shift_bits: int = 0) -> Tuple[relay.Var,
                                                     Dict[relay.Expr,
@@ -74,13 +75,14 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
         padding = (0, 0)
     else:
         raise ValueError("only Fx=1,Fy=1 or Fx=3,Fy=3 are supported")
-    if not ((strides == (1, 1)) or (strides == (2, 2))):
-        raise ValueError("only strides (1,1) and (2,2) are supported")
+    #if not ((strides == (1, 1)) or (strides == (2, 2))):
+    #    raise ValueError("only strides (1,1) and (2,2) are supported")
     x = relay.qnn.op.conv2d(input_tensor, w, relay.const(0), relay.const(0),
                             relay.const(1.0), relay.const(1.0),
                             weights_shape[-2:], channels=conv_channels,
                             strides=strides,
-                            padding=padding)
+                            padding=padding,
+                            groups=groups)
     # todo 32 bits
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits))
