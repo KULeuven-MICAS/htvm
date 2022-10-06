@@ -1,8 +1,11 @@
 # General settings
 BUILD_DIR := build
 
+# Note that this value can automatically be changed by python scripts:
+OPT_LEVEL = 3
+
 # Compiler options
-PKG_COMPILE_OPTS = -Wall -O0 -std=gnu99 #-fsanitize=address
+PKG_COMPILE_OPTS = -Wall -O$(OPT_LEVEL) -std=gnu99 #-fsanitize=address
 PULP_COMPILE_OPTS = -DSDK -m32
 # For debug support - comment these out for reduced binary size
 PKG_COMPILE_OPTS += -g
@@ -59,6 +62,6 @@ $(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)
 	$(CC) $(PKG_CFLAGS) -o  $@ $^
 
 clean:
-	rm -f $(CODEGEN_OBJS) $(BUILD_DIR)/demo $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/gdb_anchor.o
+	rm -f $(CODEGEN_OBJS) $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a $(BUILD_DIR)/demo $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/gdb_anchor.o
 
 
