@@ -4,6 +4,7 @@ import shutil
 import ctypes
 import re
 import os
+import subprocess
 import argparse
 import tvm
 import tvm.relay as relay
@@ -349,6 +350,46 @@ def adapt_gcc_opt(makefile_path: str, opt_level: int):
         makefile.truncate()
         print(f"Changed opt_level to {opt_level} @ {makefile_path}")
 
+def make(device: str = "pulp", verbose: bool = False):
+    '''
+    Invokes make from the current directory in a new subprocess
+
+    :param device: select which device to call make for, "x86" or "pulp"
+    :param verbose: print make output
+    '''
+    print(f"Make: Invoking make for device: '{device}'")
+    if device == "x86":
+        makefile = "Makefile.x86"
+    elif device == "pulp":
+        makefile = "Makefile.pulprt"
+    else:
+        raise ValueError(f"Device: '{device}' not supported")
+    output = subprocess.check_output(["make", "-f", makefile, 
+                                         "clean", "all"],
+                                         stderr=subprocess.STDOUT,
+                                         universal_newlines=True)
+    if verbose:
+        print(output)
+    print(f"Make: Built for '{device}'")
+
+
+def gdb(device: str, binary: str, gdb_script: str, verbose : bool = False):
+    print(f"GDB: Running '{gdb_script}' on '{device}'")
+    if device == "x86":
+        gdb_x86(gdb_script, binary, verbose)
+        print("GDB: Run on x86 finished")
+    elif device == "pulp":
+        raise NotImplementedError
+    else:
+        raise ValueError(f"Device: '{device}' not supported")
+
+def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
+    output = subprocess.check_output(["gdb", binary, "-x", gdb_script],
+                                     stderr=subprocess.STDOUT,
+                                     timeout=3,
+                                     universal_newlines=True) 
+    if verbose:
+        print(output)
 
 def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
     '''
@@ -361,6 +402,10 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
                         choices=("soma_dory, c", "c"),
                         help="Target string to pass onto TVMC, '-device=arm_cpu' is added to the string later",
                         default="soma_dory, c")
+    parser.add_argument('--device', dest='device',
+                        choices = ("pulp", "x86"),
+                        help="Device to make binary for (which makefile to call), (default 'pulp')",
+                        default="pulp")
     parser.add_argument('--profile', dest='measurement',
                         help="Insert PULP performance counters into generated C code; for each individual kernel, for the entire TVM artefact, or don't insert performance counters (default)",
                         choices=("individual", "global", None),
@@ -382,8 +427,20 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
                         help="Set the gcc optimization level in pulprt makefile, (default Makefile.pulprt)",
                         default=3)
     parser.add_argument('--makefile', dest='makefile',
-                        help="Set different path for pulprt makefile (default ./Makefile.pulprt)",
-                        default="Makefile.pulprt")
+            help="Set different path for pulprt makefile (default for device = x86: Makefile.x86, default for  device = pulp: Makefile.pulprt")
     args = parser.parse_args()
+    # Some options shouldn't be used together
+    if args.device == "x86":
+        if "soma_dory" in args.target:
+            raise ValueError("Dory codegen can not be compiled for --device=\"x86\", only for --device=\"pulp\"")
+        if args.measurement is not None:
+            raise ValueError("Profiling is not available for --device=\"x86\", only for --device=\"pulp\"")
+    # Set default makefile if no other is specified
+    if args.makefile is None:
+        if args.device == "pulp":
+            args.makefile = "Makefile.pulprt"
+        elif args.device == "x86":
+            args.makefile = "Makefile.x86"
     adapt_gcc_opt(args.makefile, args.gcc_opt)
-    return args.target, args.measurement, args.interactive, args.fusion, args.weight_bits, args.gcc_opt
+    return (args.target, args.device, args.measurement, args.interactive,
+            args.fusion, args.weight_bits, args.gcc_opt)

@@ -2,9 +2,9 @@
 set print elements 0
 set print repeats 0
 set pagination off
-file build/demo
-break tvmgen_default_run
+break gdb_anchor
 run
+n
 n
 n
 set logging file demo_x86.txt

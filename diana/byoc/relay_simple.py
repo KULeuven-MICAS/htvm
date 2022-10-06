@@ -4,6 +4,8 @@ from utils import (
         create_demo_file,
         parse_cli_options,
         create_random_array
+        make,
+        gdb
         )
 from profiler import insert_profiler
 import tvm
@@ -49,13 +51,15 @@ def create_model(weight_bits):
 
 
 if __name__ == "__main__":
-    target, measurement, interactive, fusion, weight_bits, gcc_opt = parse_cli_options()
+    (target, device, measurement, interactive, 
+     fusion, weight_bits, gcc_opt) = parse_cli_options()
     # create the model
     mod, params = create_model(weight_bits)
     model = TVMCModel(mod, params)
     # compile the model
     tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
     create_demo_file(mod)
+    gdb_script = "gdb_demo_x86.sh"
     fusion_name = "fused" if fusion else "unfused"
     target_name = "dory" if target == "soma_dory, c" else "c"
     csv_name = f"relay_simple_{target_name}_{fusion_name}" + \
@@ -63,3 +67,6 @@ if __name__ == "__main__":
     insert_profiler(measurement=measurement,
                     interactive=interactive,
                     csv_file=csv_name)
+    if not interactive:
+        make(device)
+        gdb(device, "build/demo", "gdb_demo_x86.sh")
