@@ -49,6 +49,8 @@ inline void VerifyDataType(DLDataType dtype) {
     // allow int1/uint4/int4
     else if (dtype.bits == 1 && dtype.code == kDLInt)
       return;
+    else if (dtype.bits == 2 && dtype.code == kDLInt)
+      return;
     else if (dtype.bits == 4 && dtype.code == kDLUInt)
       return;
     else if (dtype.bits == 4 && dtype.code == kDLInt)

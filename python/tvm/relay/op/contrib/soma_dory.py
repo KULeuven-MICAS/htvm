@@ -36,13 +36,12 @@ from tvm.relay.backend.contrib.soma_dory.transform import SomaDoryGraphQuantizer
 logger = logging.getLogger("SomaDory")
 
 
-def qnn_conv2d_pattern():
-    """Create pattern for qnn.conv2D with optional fused relu."""
-    qnn_conv2d = is_op("qnn.conv2d")(
-        wildcard(), wildcard(), is_constant(), is_constant(),
-        is_constant(), is_constant()
+def conv2d_pattern():
+    """Create pattern for conv2D with optional fused relu."""
+    conv2d = is_op("nn.conv2d")(
+        wildcard(), wildcard()
     )
-    bias_add = is_op("nn.bias_add")(qnn_conv2d, wildcard())
+    bias_add = is_op("nn.bias_add")(conv2d, wildcard())
     right_shift = is_op("right_shift")(bias_add,
                                        is_constant())
     # TODO: figure out how to match on attributes for clip?
@@ -53,7 +52,7 @@ def qnn_conv2d_pattern():
     return act_or_cast
 
 
-def check_qnn_conv2d(pattern):
+def check_conv2d(pattern):
     """Check if the Conv2D is supported by the soma dory accelerator"""
 
     if str(pattern.op.name) == "clip":
@@ -125,7 +124,7 @@ def pattern_table():
     """
 
     return [
-        ("soma_dory.qnn_conv2d", qnn_conv2d_pattern(), check_qnn_conv2d),
+        ("soma_dory.conv2d", conv2d_pattern(), check_conv2d),
     ]
 
 

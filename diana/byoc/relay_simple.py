@@ -15,19 +15,15 @@ from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
 
-def create_model():
+def create_model(weight_bits):
     input_shape = (1, 3, 16, 16)
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     weights_shape = (32, 3, 3, 3)
-    #special_data = np.array([[-7,-5,-3,-2,-1,0,1,2,3] for i in range(16*3)])
-    #special_data = special_data.reshape(weights_shape).astype(np.int8)
-    special_data = load_or_create_random_array("weights.npy",
-                                               weights_shape, np.int8)
-    x, params1 = relay_soma_conv2d(x, 'conv1', weights_shape, 
-                                   special_data,
-                                   np.ones(weights_shape[0]).astype(np.int32), 
-                                   act=False, shift_bits=4)
+    weights = load_or_create_random_array("weights.npy", weights_shape, f'int{weight_bits}')
+    bias = load_or_create_random_array("bias.npy", weights_shape[0], 'int32')
+    x, params1 = relay_soma_conv2d(x, 'conv1', weights, bias, padding=(1, 1), act=False, shift_bits=4)
+
    # weights_shape = (32, 16, 3, 3)
    # special_data = np.array([[-1,0,1] for i in range(32*16*3)])
    # special_data = special_data.reshape(weights_shape).astype(np.int8)
@@ -67,9 +63,9 @@ def create_model():
 
 
 if __name__ == "__main__":
-    target, measurement, interactive, fusion, gcc_opt = parse_cli_options()
+    target, measurement, interactive, fusion, weight_bits, gcc_opt = parse_cli_options()
     # create the model
-    mod, params = create_model()
+    mod, params = create_model(weight_bits)
     model = TVMCModel(mod, params)
     # compile the model
     tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)

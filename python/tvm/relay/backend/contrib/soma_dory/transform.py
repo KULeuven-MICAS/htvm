@@ -42,22 +42,21 @@ class SomaDoryGraphQuantizer(ExprMutator):
         new_args = [self.visit(arg) for arg in call.args]
 
         if call.op.name == 'nn.conv2d':
-            # replace nn.conv2d with qnn.conv2d and quantize weights (assume they are constant)
-            w = relay.const(new_args[1].data.numpy().astype(self.dtype))
-            new_call = relay.qnn.op.conv2d(new_args[0], w,
-                                           relay.const(0),
-                                           relay.const(0),
-                                           relay.const(1.0),
-                                           relay.const(1.0),
-                                           w.data.shape[-2:],
-                                           channels=w.data.shape[0],
-                                           strides=call.attrs.strides,
-                                           padding=call.attrs.padding,
-                                           dilation=call.attrs.dilation,
-                                           groups=call.attrs.groups)
+            # cast the weights and output of the conv2d to integers if they are floats (assume they are constant)
+            w = new_args[1]
+            if not w.data.dtype.startswith('int'):
+                w = relay.const(w.data.numpy().astype(self.dtype))
+
+            new_call = relay.op.nn.conv2d(new_args[0], w,
+                                          strides=call.attrs.strides,
+                                          padding=call.attrs.padding,
+                                          dilation=call.attrs.dilation,
+                                          groups=call.attrs.groups,
+                                          out_dtype='int32',
+                                          kernel_size=w.data.shape[-2:])
 
         elif call.op.name == 'nn.bias_add':
-            # quantize bias to int32
+            # cast bias to int32
             new_args[1] = relay.const(new_args[1].data.numpy().astype('int32'))
             new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
 
