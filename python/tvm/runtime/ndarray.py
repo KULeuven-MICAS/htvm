@@ -216,7 +216,7 @@ class NDArray(NDArrayBase):
             shape = shape + (t.lanes,)
             t.lanes = 1
             dtype = str(t)
-        if dtype == "int4":
+        if dtype == "int4" or dtype == "int2":
             dtype = "int8"
         if dtype == "bfloat16":
             dtype = "uint16"

@@ -57,9 +57,9 @@ def create_dory_conv_node(call, index: int):
     """Populate a dory layer node with convolution args and attrs
     """
     if len(call.args) != 3:
-        raise ValueError(f"Expected number of args for doma_dory.qnn_conv2d is 3, got {len(call.args)}")
+        raise ValueError(f"Expected number of args for doma_dory.conv2d is 3, got {len(call.args)}")
 
-    conv_call = get_root_call(call.op.body, "qnn.conv2d")
+    conv_call = get_root_call(call.op.body, "nn.conv2d")
     right_shift_call = get_root_call(call.op.body, "right_shift")
 
     # TODO: assert that weights and bias are constants
@@ -68,6 +68,8 @@ def create_dory_conv_node(call, index: int):
     weights = call.args[1].data
     bias = call.args[2].data
     shift_value = right_shift_call.args[1].data
+
+    assert weights.dtype[:3] == 'int', "Expected weights to be of type intX"
 
     node = Layer_node()
     node.name = 'Convolution'
@@ -90,7 +92,7 @@ def create_dory_conv_node(call, index: int):
     node.constants_memory = None
     node.constant_bits = None
     node.weight_type = 'int'
-    node.weight_bits = 8
+    node.weight_bits = int(weights.dtype[3:])   # extract the bit number from the dtype
     node.bias_bits = 32
     node.MACs = node.output_dimensions[0] * node.output_dimensions[1] * node.output_channels \
                 * node.kernel_shape[1] * node.kernel_shape[0] * node.input_channels
@@ -176,7 +178,7 @@ class RelayToDoryGraph(ExprVisitor):
             raise ValueError(f"Expected call.op to be relay.Function, got {type(call.op)}")
 
         pattern_name = call.op.attrs['Composite']
-        if pattern_name == 'soma_dory.qnn_conv2d':
+        if pattern_name == 'soma_dory.conv2d':
             self.dory_graph.append(create_dory_conv_node(call, 0))
 
             final_call = call.op.body

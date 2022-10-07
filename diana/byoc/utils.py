@@ -1,6 +1,7 @@
 import pathlib
 import tarfile
 import shutil
+import ctypes
 import re
 import os
 import argparse
@@ -11,15 +12,33 @@ from tvm.driver.tvmc.compiler import compile_model
 from tvm.driver.tvmc.model import TVMCModel
 from tvm.relay.backend import Executor, Runtime
 
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict, Optional, Union
 import numpy.typing as npt
 
 
+def numpy_to_array(np_arr: npt.NDArray, dtype: str):
+    """ Convert a numpy array to a TVM array with datatype `dtype`.
+    Although such a function exists in TVM, it does not support creating TVM arrays with dtypes
+    that are not supported in numpy, like 'int4' or 'int2'.
+    :param np_arr: the given numpy array
+    :param dtype:  the resulting data type of the TVM array
+    :return: the TVM array
+    """
+    assert np_arr.flags["C_CONTIGUOUS"]
+
+    arr = tvm.nd.empty(np_arr.shape, dtype)
+    data = np_arr.ctypes.data_as(ctypes.c_void_p)
+    nbytes = ctypes.c_size_t(np_arr.size * np_arr.dtype.itemsize)
+    tvm.nd.check_call(tvm.nd._LIB.TVMArrayCopyFromBytes(arr.handle, data, nbytes))
+
+    return arr
+
+
 def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
-                      weights_shape: Tuple[int],
-                      w_value: npt.NDArray[np.int8],
-                      b_value: npt.NDArray[np.int32],
+                      w_value: tvm.nd.array,
+                      b_value: tvm.nd.array,
                       strides: Tuple[int, ...] = (1, 1),
+                      padding: Tuple[int, ...] = (0, 0),
                       groups: int = 1,
                       act: bool = False,
                       shift_bits: int = 0) -> Tuple[relay.Var,
@@ -30,10 +49,10 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     This means it can be offloaded to the accelerator.
     :param input_tensor: relay.Var for input
     :param layer_name: string that determines relay variable naming
-    :param weights_shape: tuple describing shape of weight tensor
     :param w_value: numpy int8 tensor that contains weight values
     :param b_value: numpy int32 tensor that contains bias values
     :param strides: tuple describing convolution stride (x,y)
+    :param padding: tuple describing convolution padding
     :param act: bool that toggles extra ReLU to be added (see below)
     :shift_bits: int that sets amount of bits to shift right
         value must be between [0,31]
@@ -52,8 +71,6 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     ```
         %5 = clip(%4, a_min=0f, a_max=127f);
     ```
-    NOTE: The shape of the bias is hardcoded to use the first dimension
-    of the weights_shape
 
     This function returns the relay expression for this graph,
     along with a parameter dictionary
@@ -61,33 +78,25 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     # define weights and bias variables
     weights_name = layer_name + '.weights'
     bias_name = layer_name + '.bias'
-    conv_channels = weights_shape[0]
+
     # define relay input vars
-    w = relay.var(weights_name, relay.TensorType(weights_shape, 'int8'))
-    b = relay.var(bias_name, relay.TensorType((conv_channels,), 'int32'))
+    w = relay.var(weights_name, relay.TensorType(w_value.shape, w_value.dtype))
+    b = relay.var(bias_name, relay.TensorType(b_value.shape, b_value.dtype))
+
     # define weights and bias values in params
-    params = {weights_name: tvm.nd.array(w_value),
-              bias_name: tvm.nd.array(b_value)}
-    # define ops for a convolution on SOMA
-    if (weights_shape[-2:] == (3, 3)):
-        padding = (1, 1)
-    elif (weights_shape[-2:] == (1, 1)):
-        padding = (0, 0)
-    else:
-        raise ValueError("only Fx=1,Fy=1 or Fx=3,Fy=3 are supported")
-    #if not ((strides == (1, 1)) or (strides == (2, 2))):
-    #    raise ValueError("only strides (1,1) and (2,2) are supported")
-    x = relay.qnn.op.conv2d(input_tensor, w, relay.const(0), relay.const(0),
-                            relay.const(1.0), relay.const(1.0),
-                            weights_shape[-2:], channels=conv_channels,
-                            strides=strides,
-                            padding=padding,
-                            groups=groups)
-    # todo 32 bits
+    params = {weights_name: w_value, bias_name: b_value}
+
+    # define operations
+    x = relay.op.nn.conv2d(input_tensor, w,
+                           strides=strides,
+                           padding=padding,
+                           groups=groups,
+                           out_dtype=b_value.dtype)
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits))
     x = relay.op.clip(x, a_min=-128, a_max=127)
     x = relay.op.cast(x, 'int8')
+
     # Optional: ReLU
     if act:
         x = relay.op.clip(x, a_min=0, a_max=127)
@@ -96,7 +105,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
 
 
 def load_or_create_random_array(file_name: str, shape: Tuple[int, ...],
-                                dtype: npt.DTypeLike) -> npt.ArrayLike:
+                                dtype: str) -> npt.ArrayLike:
     """
     Loads a numpy array stored in file with file name equal to file_name.
     If the data type or shape doesn't match the prescribed equivalent, or
@@ -104,24 +113,47 @@ def load_or_create_random_array(file_name: str, shape: Tuple[int, ...],
     with file_name with shape of shape and data type equal to dtype.
     :param file_name: string indicating path to stored/loaded array (*.npy)
     :param shape: tuple of ints that indicates size of array
-    :param dtype: numpy datatype that indicates the data type of the array
-    :return: numpy array which was loaded or created
+    :param dtype: datatype that indicates the data type of the array
+    :return: array which was loaded or created
 
     NOTE: The random data is integer, uniformely distributed and ranges from
-    maximum till minimum data depending on the data type.
+    minimum to maximum depending on the data type:
     E.g. in8 --> [-128, 127]
     """
+    def get_dtype_range():
+        try:
+            dtype_min = np.iinfo(dtype).min
+            dtype_max = np.iinfo(dtype).max
+        except ValueError:
+            range_map = {
+                'int4': (-8, 7),
+                'int2': (-1, 1)     # technically this should be (-2, 1), but we prefer to not use -2
+            }
+            try:
+                dtype_min, dtype_max = range_map[dtype]
+            except KeyError:
+                raise ValueError(f"Creating an array of dtype {dtype} is not supported")
+
+        return dtype_min, dtype_max
+
     def create_and_store() -> npt.ArrayLike:
-        dtype_min = np.iinfo(dtype).min
-        dtype_max = np.iinfo(dtype).max
-        array = np.random.randint(low=dtype_min, high=dtype_max,
-                                  size=shape, dtype=dtype)
+        dtype_min, dtype_max = get_dtype_range()
+        np_dtype = dtype
+        if dtype in ['int4', 'int2']:
+            np_dtype = 'int8'
+        array = np.random.randint(low=dtype_min, high=dtype_max+1,
+                                  size=shape, dtype=np_dtype)
+        # TODO: save dtype in filename
         np.save(file_name, array)
         print(f"Created new random array in \"{file_name}\"")
-        return array
+        return numpy_to_array(array, dtype)
+
+    def load():
+        array = np.load(file_name)
+        return numpy_to_array(array, dtype)
 
     try:
-        array = np.load(file_name)
+        array = load()
         if (array.shape != shape or array.dtype != dtype):
             # When the loaded array doesn't match the prescribed one
             # Create a new array that matches the shape and dtype
@@ -132,6 +164,7 @@ def load_or_create_random_array(file_name: str, shape: Tuple[int, ...],
     except FileNotFoundError:
         print(f"\"{file_name}\" doesn't exist")
         array = create_and_store()
+
     return array
 
 
@@ -330,6 +363,10 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
                         help="Set TVM's Relay Fusion pass maximum fusion depth to 0",
                         action='store_const', const=False,
                         default=True)
+    parser.add_argument('--weight-bits', dest='weight_bits', type=int,
+                        help="Number of bits per weight. This affects the selection of the digital/analog core",
+                        choices=(8, 2),
+                        default=8)
     parser.add_argument('--gcc-opt', dest='gcc_opt',
                         choices = (0, 1, 2, 3), type=int,
                         help="Set the gcc optimization level in pulprt makefile, (default Makefile.pulprt)",
@@ -339,4 +376,4 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
                         default="Makefile.pulprt")
     args = parser.parse_args()
     adapt_gcc_opt(args.makefile, args.gcc_opt)
-    return args.target, args.measurement, args.interactive, args.fusion, args.gcc_opt
+    return args.target, args.measurement, args.interactive, args.fusion, args.weight_bits, args.gcc_opt
