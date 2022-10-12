@@ -1,9 +1,9 @@
 from utils import (
-        tvmc_compile_and_unpack, 
+        tvmc_compile_and_unpack,
         relay_soma_conv2d,
-        create_demo_file, 
+        create_demo_file,
         parse_cli_options,
-        load_or_create_random_array
+        create_random_array
         )
 from profiler import insert_profiler
 import tvm
@@ -14,45 +14,31 @@ from tvm.driver.tvmc.compiler import compile_model
 from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
+# for reproducability
+np.random.seed(0)
 
 def create_model(weight_bits):
     input_shape = (1, 3, 16, 16)
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     weights_shape = (32, 3, 3, 3)
-    weights = load_or_create_random_array("weights.npy", weights_shape, f'int{weight_bits}')
-    bias = load_or_create_random_array("bias.npy", weights_shape[0], 'int32')
-    x, params1 = relay_soma_conv2d(x, 'conv1', weights, bias, padding=(1, 1), act=False, shift_bits=4)
+    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    bias = create_random_array(weights_shape[0], 'int32')
+    x, params1 = relay_soma_conv2d(x, 'conv1', weights, bias, padding=(1, 1), act=True, shift_bits=4)
 
-   # weights_shape = (32, 16, 3, 3)
-   # special_data = np.array([[-1,0,1] for i in range(32*16*3)])
-   # special_data = special_data.reshape(weights_shape).astype(np.int8)
-   # x, params2 = relay_soma_conv2d(x, 'conv2', weights_shape,
-   #                                special_data, 
-   #                                np.ones(weights_shape[0]).astype(np.int32), 
-   #                                act=True, shift_bits=5)
+    #weights_shape = (16, 32, 3, 3)
+    #weights = create_random_array(weights_shape, f'int{weight_bits}')
+    #bias = create_random_array(weights_shape[0], 'int32')
+    #x, params2 = relay_soma_conv2d(x, 'conv2', weights, bias, padding=(1, 1), act=True, shift_bits=5)
 
-   # weights_shape = (16, 32, 3, 3)
-   # special_data = np.array([[-5,-4,-3,-2,-1,0,1,2,3] for i in range(32*16)])
-   # special_data = special_data.reshape(weights_shape).astype(np.int8)
-   # x, params3 = relay_soma_conv2d(x, 'conv3', weights_shape,
-   #                                special_data,
-   #                                np.ones(weights_shape[0]).astype(np.int32),
-   #                                strides=(2,2),
-   #                                act=False, shift_bits=3)
+    #weights_shape = (32, 16, 3, 3)
+    #weights = create_random_array(weights_shape, f'int{weight_bits}')
+    #bias = create_random_array(weights_shape[0], 'int32')
+    #x, params3 = relay_soma_conv2d(x, 'conv3', weights, bias, padding=(1, 1), act=False, shift_bits=3)
 
-   # y_shape = (1, 16, 16, 16)
-   # y_name = "input_y"
-   # y = relay.var(y_name, relay.TensorType(y_shape, 'int8'))
-   # y_value = np.ones(y_shape).astype(np.int8)
-   # y_param = {y_name: tvm.nd.array(y_value)} 
-
-   # x = relay.add(x, y)
-
-   # # combine all params in one dictionary
-   # params1.update(params2)
-   # params1.update(params3)
-   # params1.update(y_param)
+    ## combine all params in one dictionary
+    #params1.update(params2)
+    #params1.update(params3)
     params = params1
 
     # create an IR module from the relay expression

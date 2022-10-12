@@ -104,14 +104,9 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     return x, params
 
 
-def load_or_create_random_array(file_name: str, shape: Tuple[int, ...],
-                                dtype: str) -> npt.ArrayLike:
+def create_random_array(shape: Tuple[int, ...], dtype: str) -> tvm.nd.array:
     """
-    Loads a numpy array stored in file with file name equal to file_name.
-    If the data type or shape doesn't match the prescribed equivalent, or
-    if the file does not exist yet it creates a random numpy array in file
-    with file_name with shape of shape and data type equal to dtype.
-    :param file_name: string indicating path to stored/loaded array (*.npy)
+    Generate random interger weights with numpy and converts them to a TVMArray with requested dtype.
     :param shape: tuple of ints that indicates size of array
     :param dtype: datatype that indicates the data type of the array
     :return: array which was loaded or created
@@ -136,36 +131,13 @@ def load_or_create_random_array(file_name: str, shape: Tuple[int, ...],
 
         return dtype_min, dtype_max
 
-    def create_and_store() -> npt.ArrayLike:
-        dtype_min, dtype_max = get_dtype_range()
-        np_dtype = dtype
-        if dtype in ['int4', 'int2']:
-            np_dtype = 'int8'
-        array = np.random.randint(low=dtype_min, high=dtype_max+1,
-                                  size=shape, dtype=np_dtype)
-        # TODO: save dtype in filename
-        np.save(file_name, array)
-        print(f"Created new random array in \"{file_name}\"")
-        return numpy_to_array(array, dtype)
-
-    def load():
-        array = np.load(file_name)
-        return numpy_to_array(array, dtype)
-
-    try:
-        array = load()
-        if (array.shape != shape or array.dtype != dtype):
-            # When the loaded array doesn't match the prescribed one
-            # Create a new array that matches the shape and dtype
-            print(f"Loaded array from \"{file_name}\" doesn't match")
-            array = create_and_store()
-        else:
-            print(f"Loaded random array from \"{file_name}\"")
-    except FileNotFoundError:
-        print(f"\"{file_name}\" doesn't exist")
-        array = create_and_store()
-
-    return array
+    dtype_min, dtype_max = get_dtype_range()
+    np_dtype = dtype
+    if dtype in ['int4', 'int2']:
+        np_dtype = 'int8'
+    np_array = np.random.randint(low=dtype_min, high=dtype_max+1,
+                                 size=shape, dtype=np_dtype)
+    return numpy_to_array(np_array, dtype)
 
 
 def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
