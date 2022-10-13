@@ -49,8 +49,8 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     This means it can be offloaded to the accelerator.
     :param input_tensor: relay.Var for input
     :param layer_name: string that determines relay variable naming
-    :param w_value: numpy int8 tensor that contains weight values
-    :param b_value: numpy int32 tensor that contains bias values
+    :param w_value: int8 tensor that contains weight values
+    :param b_value: int32 tensor that contains bias values
     :param strides: tuple describing convolution stride (x,y)
     :param padding: tuple describing convolution padding
     :param act: bool that toggles extra ReLU to be added (see below)
@@ -100,6 +100,32 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     # Optional: ReLU
     if act:
         x = relay.op.clip(x, a_min=0, a_max=127)
+
+    return x, params
+
+
+def relay_soma_dense(input_tensor: relay.Var, layer_name: str,
+                     w_value: tvm.nd.array,
+                     b_value: tvm.nd.array,
+                     act: bool = False,
+                     shift_bits: int = 0):
+    """
+    Creates a relay dense graph which is SOMA compatible
+    :param input_tensor: relay.Var for input
+    :param layer_name: string that determines relay variable naming
+    :param w_value: int8 tensor that contains weight values, must be of shape (num_inputs, num_outputs, 1, 1)
+    :param b_value: int32 tensor that contains bias values
+    :param act: bool that toggles extra ReLU to be added (see below)
+    :shift_bits: int that sets amount of bits to shift right
+        value must be between [0,31]
+    """
+    # reshape (N x C) to (N x C x 1 x 1)
+    x = relay.reshape(input_tensor, (1, w_value.shape[1], 1, 1))
+
+    x, params = relay_soma_conv2d(x, layer_name, w_value, b_value, act=act, shift_bits=shift_bits)
+
+    # reshape to original (N x C)
+    x = relay.reshape(x, (1, w_value.shape[0]))
 
     return x, params
 
