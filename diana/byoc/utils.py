@@ -379,9 +379,11 @@ def gdb(device: str, binary: str, gdb_script: str, verbose : bool = False):
         gdb_x86(gdb_script, binary, verbose)
         print("GDB: Run on x86 finished")
     elif device == "pulp":
-        raise NotImplementedError
+        gdb_pulp(gdb_script, binary, verbose)
+        print("GDB: Run on PULP finished")
     else:
         raise ValueError(f"Device: '{device}' not supported")
+
 
 def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
     output = subprocess.check_output(["gdb", binary, "-x", gdb_script],
@@ -390,6 +392,12 @@ def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
                                      universal_newlines=True) 
     if verbose:
         print(output)
+
+
+def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False):
+    input("Now run the pulp script yourself")
+    return
+    
 
 def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
     '''
