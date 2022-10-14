@@ -5,7 +5,7 @@ set pagination off
 file build/pulpissimo/demo/demo
 target remote localhost:3333
 load
-break tvmgen_default_run
+break gdb_anchor
 c
 n
 n
