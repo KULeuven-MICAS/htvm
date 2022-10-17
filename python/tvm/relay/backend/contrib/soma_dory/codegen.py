@@ -188,6 +188,24 @@ class RelayToDoryGraph(ExprVisitor):
             raise ValueError(f"Unknown composite function {pattern_name}")
 
 
+def formatting_constant_parameters_tensors(hw_graph):
+    """Copied from DORY HW_Parser.py, but without calculating the checksums for the activations
+    """
+    for i, node in enumerate(hw_graph):
+        if node.get_parameter('weight_bits') >= 8:
+            node.add_checksum_w_integer()
+        else:
+            weight_name = ""
+            if "Convolution" in node.name or "FullyConnected" in node.name:
+                for name in node.constant_names:
+                    if name not in ["l","k","outshift","outmul","outadd"]:
+                        if "bias" not in name:
+                            weight_name = name
+            if weight_name in node.__dict__:
+                node.__dict__[weight_name]["value"] = node.__dict__[weight_name]["value"].flatten().tolist()
+            node.check_sum_w = 0
+
+
 @tvm._ffi.register_func("relay.ext.soma_dory")
 def soma_dory_compiler(mod: tvm.ir.IRModule):
     """Our codegen entry point
@@ -208,10 +226,7 @@ def soma_dory_compiler(mod: tvm.ir.IRModule):
     converter.renaming_weights()
     hw_graph = converter.DORY_Graph
 
-    # although the checksums are not needed, we need to call this function since it flattens and reorganizes weights into uint8s,
-    # needed by the code generator
-    for node in hw_graph:
-        node.add_checksum_w_integer()
+    formatting_constant_parameters_tensors(hw_graph)
 
     # use function name that tvm provides
     func_name = mod.attrs.global_symbol
