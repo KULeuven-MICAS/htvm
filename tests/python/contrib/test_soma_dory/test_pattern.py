@@ -26,8 +26,6 @@ from tvm.relay.op.contrib import soma_dory
 
 def make_conv2d_pattern(input_shape=[1, 3, 16, 32],
                         weight_shape=[5, 3, 1, 1],
-                        conv_channels=5,
-                        kernel_size=[1, 1],
                         shift_factor=1,
                         relu=True,
                         bias_add=True,
@@ -39,18 +37,18 @@ def make_conv2d_pattern(input_shape=[1, 3, 16, 32],
                         kernel_layout='OIHW'):
 
     dtype = 'int8'
+    conv_channels = weight_shape[0]
     x = relay.var('input', relay.TensorType(input_shape, dtype))
     w = relay.const(np.zeros(weight_shape, dtype))
-    x = relay.qnn.op.conv2d(x, w, relay.const(0), relay.const(0),
-                            relay.const(1.0), relay.const(1.0),
-                            kernel_size,
-                            conv_channels,
-                            strides=strides,
-                            padding=padding,
-                            dilation=dilation,
-                            groups=groups,
-                            data_layout=data_layout,
-                            kernel_layout=kernel_layout)
+    x = relay.op.nn.conv2d(x, w,
+                           strides=strides,
+                           padding=padding,
+                           dilation=dilation,
+                           groups=groups,
+                           kernel_size=weight_shape[-2:],
+                           data_layout=data_layout,
+                           kernel_layout=kernel_layout,
+                           out_dtype='int32')
     if bias_add:
         b = relay.const(np.zeros(conv_channels, 'int32'))
         x = relay.op.nn.bias_add(x, b)
@@ -74,80 +72,98 @@ def make_conv2d_pattern(input_shape=[1, 3, 16, 32],
     return pattern
 
 
-def test_check_qnn_conv2d_without_relu():
+def test_check_conv2d_without_relu():
     pattern = make_conv2d_pattern(relu=False)
-    assert soma_dory.check_qnn_conv2d(pattern)
+    assert soma_dory.check_conv2d(pattern)
 
 
 ## Tests that verify detection of supported conv2d attribute values
 
 @pytest.mark.parametrize("kernel_size", [[7, 7], [5, 5], [3, 3], [1, 1]])
-def test_check_qnn_conv2d_supported_kernel_sizes(kernel_size):
+def test_check_conv2d_supported_kernel_sizes(kernel_size):
 
-    pattern = make_conv2d_pattern(weight_shape=[5, 3] + kernel_size, kernel_size=kernel_size)
-    assert soma_dory.check_qnn_conv2d(pattern)
+    pattern = make_conv2d_pattern(weight_shape=[5, 3] + kernel_size)
+    assert soma_dory.check_conv2d(pattern)
 
 
 @pytest.mark.parametrize("padding", [[1, 1, 1, 1], [0, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1]])
-def test_check_qnn_conv2d_supported_padding(padding):
+def test_check_conv2d_supported_padding(padding):
 
     pattern = make_conv2d_pattern(padding=padding)
-    assert soma_dory.check_qnn_conv2d(pattern)
+    assert soma_dory.check_conv2d(pattern)
 
 
 @pytest.mark.parametrize("strides", [[1, 1], [2, 2]])
-def test_check_qnn_conv2d_supported_strides(strides):
+def test_check_conv2d_supported_strides(strides):
 
     pattern = make_conv2d_pattern(strides=strides)
-    assert soma_dory.check_qnn_conv2d(pattern)
+    assert soma_dory.check_conv2d(pattern)
 
 
 ## Tests that verify detection of unsupported conv2d attribute values
 
 @pytest.mark.parametrize("kernel_size", [[1, 3], [3, 1], [2, 2]])
-def test_check_qnn_conv2d_unsupported_kernel_sizes(kernel_size):
+def test_check_conv2d_unsupported_kernel_sizes(kernel_size):
 
-    pattern = make_conv2d_pattern(weight_shape=[5, 3] + kernel_size, kernel_size=kernel_size)
-    assert not soma_dory.check_qnn_conv2d(pattern)
+    pattern = make_conv2d_pattern(weight_shape=[5, 3] + kernel_size)
+    assert not soma_dory.check_conv2d(pattern)
 
 
 @pytest.mark.parametrize("strides", [[3, 3], [1, 2], [2, 1]])
-def test_check_qnn_conv2d_unsupported_strides(strides):
+def test_check_conv2d_unsupported_strides(strides):
 
     pattern = make_conv2d_pattern(strides=strides)
-    assert not soma_dory.check_qnn_conv2d(pattern)
+    assert not soma_dory.check_conv2d(pattern)
 
 
 @pytest.mark.parametrize("padding", [[2, 2, 2, 2], [1, 0, 1, 0], [0, 1, 0, 1]])
-def test_check_qnn_conv2d_unsupported_padding(padding):
+def test_check_conv2d_unsupported_padding(padding):
 
     pattern = make_conv2d_pattern(padding=padding)
-    assert not soma_dory.check_qnn_conv2d(pattern)
+    assert not soma_dory.check_conv2d(pattern)
 
 
 @pytest.mark.parametrize("dilation", [[2, 2], [1, 2], [2, 1]])
-def test_check_qnn_conv2d_unsupported_dilation(dilation):
+def test_check_conv2d_unsupported_dilation(dilation):
 
     pattern = make_conv2d_pattern(dilation=dilation)
-    assert not soma_dory.check_qnn_conv2d(pattern)
+    assert not soma_dory.check_conv2d(pattern)
 
 
 @pytest.mark.parametrize("shift_factor", [-1, 32])
-def test_check_qnn_conv2d_invalid_shift_factor(shift_factor):
+def test_check_conv2d_invalid_shift_factor(shift_factor):
     pattern = make_conv2d_pattern(shift_factor=shift_factor)
-    assert not soma_dory.check_qnn_conv2d(pattern)
+    assert not soma_dory.check_conv2d(pattern)
 
 
-def test_check_qnn_conv2d_no_bias_add():
+@pytest.mark.parametrize("groups", [1, 16])
+def test_check_conv2d_support_depthwise(groups):
+    input_channels = 16
+    pattern = make_conv2d_pattern(input_shape=[1, input_channels, 16, 32],
+                                  weight_shape=[input_channels, input_channels//groups, 3, 3],
+                                  groups=groups)
+    assert soma_dory.check_conv2d(pattern)
+
+
+@pytest.mark.parametrize("groups", [2, 4])
+def test_check_conv2d_unsupported_groups(groups):
+    input_channels = 16
+    pattern = make_conv2d_pattern(input_shape=[1, input_channels, 16, 32],
+                                  weight_shape=[5, input_channels//groups, 3, 3],
+                                  groups=groups)
+    assert not soma_dory.check_conv2d(pattern)
+
+
+def test_check_conv2d_no_bias_add():
     # no bias_add is currently not supported
     pattern = make_conv2d_pattern(bias_add=False)
-    assert not soma_dory.check_qnn_conv2d(pattern)
+    assert not soma_dory.check_conv2d(pattern)
 
 # TODO: make this work
-#def test_check_qnn_conv2d_unsupported_data_layout():
+#def test_check_conv2d_unsupported_data_layout():
 #    pattern = make_conv2d_pattern(input_shape=[1, 16, 32, 3],
 #                                  weight_shape=[5, 3, 1, 1],
 #                                  conv_channels=5,
 #                                  kernel_size=[1, 1],
 #                                  data_layout='NHWC')
-#    assert not soma_dory.check_qnn_conv2d(pattern)
+#    assert not soma_dory.check_conv2d(pattern)

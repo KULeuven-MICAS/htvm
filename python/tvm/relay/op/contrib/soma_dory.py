@@ -84,6 +84,7 @@ def check_conv2d(pattern):
         return False
 
     conv2d = bias_add.args[0]
+    num_output_channels = conv2d.args[1].data.shape[0]
 
     def is_conv2d_attr_value_supported(attrs, name, supported_values):
         attr = attrs[name]
@@ -103,7 +104,7 @@ def check_conv2d(pattern):
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'padding', [4*[0], 4*[1], [1, 1, 0, 0], [0, 0, 1, 1]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'dilation', [[1, 1]])
-        or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', [1])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', [1, num_output_channels])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_layout', ['OIHW'])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'data_layout', ['NCHW'])):
 
