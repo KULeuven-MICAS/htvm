@@ -246,7 +246,8 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
     os.remove(mlf_path)
 
 
-def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c"):
+def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c", 
+                     init_value: int = 1):
     '''
     Function that creates a demo file in which inputs and outputs of the
     right size are allocated and setup automatically. Based on:
@@ -305,7 +306,9 @@ int main(int argc, char** argv) {
         """
     // Fill first input with ones
     for (uint32_t i = 0; i < input_size; i++){
-        input[i] = 1;
+    """ + \
+    f"        input[i] = {init_value};\n" +\
+    """
     }
 
     struct tvmgen_default_outputs outputs = {
@@ -386,7 +389,8 @@ def gdb(device: str, binary: str, gdb_script: str, verbose : bool = False):
 
 
 def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
-    output = subprocess.check_output(["gdb", binary, "-x", gdb_script],
+    output = subprocess.check_output(["gdb", binary, "-x", gdb_script, 
+                                      "-batch"],
                                      stderr=subprocess.STDOUT,
                                      timeout=3,
                                      universal_newlines=True) 
