@@ -23,53 +23,53 @@ def create_model(weight_bits):
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     num_units = 128
-    weights_shape = (num_units, input_shape[1], 1, 1)
+    weights_shape = (num_units, input_shape[1])
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense1 = relay_soma_dense(x, 'dense1', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units, 1, 1)
+    weights_shape = (num_units, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense2 = relay_soma_dense(x, 'dense2', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units, 1, 1)
+    weights_shape = (num_units, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense3 = relay_soma_dense(x, 'dense3', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units, 1, 1)
+    weights_shape = (num_units, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense4 = relay_soma_dense(x, 'dense4', weights, bias, act=True, shift_bits=4)
 
-    num_units_neck = 8
-    weights_shape = (num_units_neck, num_units, 1, 1)
+    num_units_neck = 16     # NOTE: originally 8, but made 16 to support diana accelerator
+    weights_shape = (num_units_neck, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense5 = relay_soma_dense(x, 'dense5', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units_neck, 1, 1)
+    weights_shape = (num_units, num_units_neck)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense6 = relay_soma_dense(x, 'dense6', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units, 1, 1)
+    weights_shape = (num_units, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense7 = relay_soma_dense(x, 'dense7', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units, 1, 1)
+    weights_shape = (num_units, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense8 = relay_soma_dense(x, 'dense8', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_units, num_units, 1, 1)
+    weights_shape = (num_units, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense9 = relay_soma_dense(x, 'dense9', weights, bias, act=True, shift_bits=4)
 
-    weights_shape = (num_outputs, num_units, 1, 1)
+    weights_shape = (num_outputs, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense10 = relay_soma_dense(x, 'dense10', weights, bias, act=False, shift_bits=4)

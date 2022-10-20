@@ -36,15 +36,11 @@ from tvm.relay.backend.contrib.soma_dory.transform import SomaDoryGraphQuantizer
 logger = logging.getLogger("SomaDory")
 
 
-def conv2d_pattern():
-    """Create pattern for conv2D with optional fused relu."""
-    conv2d = is_op("nn.conv2d")(
-        wildcard(), wildcard()
-    )
-    bias_add = is_op("nn.bias_add")(conv2d, wildcard())
-    right_shift = is_op("right_shift")(bias_add,
-                                       is_constant())
-    # TODO: figure out how to match on attributes for clip?
+def _biasadd_requant_clip_pattern(linear_op):
+    """Add pattern bias_add-requant-optional_clip to linear_op"""
+
+    bias_add = is_op("nn.bias_add")(linear_op, wildcard())
+    right_shift = is_op("right_shift")(bias_add, is_constant())
     clip = is_op("clip")(right_shift)
     cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
     # optionally have extra clip/ReLU
@@ -52,8 +48,28 @@ def conv2d_pattern():
     return act_or_cast
 
 
-def check_conv2d(pattern):
-    """Check if the Conv2D is supported by the soma dory accelerator"""
+def conv2d_pattern():
+    """Create pattern for conv2D with optional fused relu."""
+
+    conv2d = is_op("nn.conv2d")(
+            wildcard(), wildcard()
+    )
+    return _biasadd_requant_clip_pattern(conv2d)
+
+
+def fully_connected_pattern():
+    """Create pattern for nn.dense with optional fused relu."""
+
+    fc = is_op("nn.dense")(
+        wildcard(), wildcard()
+    )
+    return _biasadd_requant_clip_pattern(fc)
+
+
+def _check_biasadd_requant_clip(pattern):
+    """Check if bias_add-requant-clip pattern is supported by the soma dory accelerator
+    Returns None if not supported, returns the linear op before this sequence if supported
+    """
 
     if str(pattern.op.name) == "clip":
         clip = pattern
@@ -65,25 +81,34 @@ def check_conv2d(pattern):
     # Check range of shift factor
     shift_factor = right_shift.args[1].data.numpy()
     if shift_factor < 0 or shift_factor > 31:
-        logger.warning("Conv2d shift factor must be in range [0, 31], but got {shift_factor}. Acceleration for this conv2d is not supported")
-        return False
+        logger.warning("shift factor of conv/dense operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported")
+        return None
 
     right_shift_input = right_shift.args[0]
 
     # For now, we don't support convolutions without bias
     if str(right_shift_input.op.name) != "nn.bias_add":
-        logger.warning("Found convolution without nn.bias_add. Acceleration for this conv2d is not supported")
-        return False
+        logger.warning("Found conv/dense op without nn.bias_add. Acceleration for this op is not supported")
+        return None
 
     bias_add = right_shift_input
 
     # Check bias dtype
     bias_dtype = bias_add.args[1].checked_type.dtype
     if bias_dtype != 'int32':
-        logger.warning(f"Expected nn.bias_add parameters to be of type int32, but got {bias_dtype}. Acceleration for this conv2d is not supported")
+        logger.warning(f"Expected nn.bias_add parameters to be of type int32, but got {bias_dtype}. Acceleration for this op is not supported")
+        return None
+
+    return bias_add.args[0]
+
+
+def check_conv2d(pattern):
+    """Check if the Conv2D is supported by the soma dory accelerator"""
+
+    conv2d = _check_biasadd_requant_clip(pattern)
+    if conv2d is None:
         return False
 
-    conv2d = bias_add.args[0]
     num_output_channels = conv2d.args[1].data.shape[0]
 
     def is_conv2d_attr_value_supported(attrs, name, supported_values):
@@ -116,6 +141,19 @@ def check_conv2d(pattern):
     return True
 
 
+def check_fully_connected(pattern):
+    """Check if the fully connected layer is supported by the soma dory accelerator"""
+
+    fc = _check_biasadd_requant_clip(pattern)
+    if fc is None:
+        return False
+
+    #fc_input = fc.args[0]
+    #fc_weight = fc.args[1]
+
+    return True
+
+
 def pattern_table():
     """
     Registers the patterns we want to match.
@@ -126,6 +164,7 @@ def pattern_table():
 
     return [
         ("soma_dory.conv2d", conv2d_pattern(), check_conv2d),
+        ("soma_dory.dense", fully_connected_pattern(), check_fully_connected),
     ]
 
 

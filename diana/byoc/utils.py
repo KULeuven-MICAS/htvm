@@ -45,7 +45,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                                                     Dict[relay.Expr,
                                                          tvm.nd.array]]:
     '''
-    Creates a relay conv2d graph which is SOMA compatible
+    Creates a relay conv2d op which is SOMA compatible
     This means it can be offloaded to the accelerator.
     :param input_tensor: relay.Var for input
     :param layer_name: string that determines relay variable naming
@@ -54,8 +54,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
     :param strides: tuple describing convolution stride (x,y)
     :param padding: tuple describing convolution padding
     :param act: bool that toggles extra ReLU to be added (see below)
-    :shift_bits: int that sets amount of bits to shift right
-        value must be between [0,31]
+    :shift_bits: int that sets amount of bits to shift right. Value must be between [0,31]
     :return: tuple that contains relay param dictionary and relay
         expr for the subgraph.
 
@@ -110,22 +109,35 @@ def relay_soma_dense(input_tensor: relay.Var, layer_name: str,
                      act: bool = False,
                      shift_bits: int = 0):
     """
-    Creates a relay dense graph which is SOMA compatible
+    Creates a relay dense op which is SOMA compatible
     :param input_tensor: relay.Var for input
     :param layer_name: string that determines relay variable naming
     :param w_value: int8 tensor that contains weight values, must be of shape (num_inputs, num_outputs, 1, 1)
     :param b_value: int32 tensor that contains bias values
     :param act: bool that toggles extra ReLU to be added (see below)
-    :shift_bits: int that sets amount of bits to shift right
-        value must be between [0,31]
+    :shift_bits: int that sets amount of bits to shift right. Value must be between [0,31]
     """
-    # reshape (N x C) to (N x C x 1 x 1)
-    x = relay.reshape(input_tensor, (1, w_value.shape[1], 1, 1))
+    # define weights and bias variables
+    weights_name = layer_name + '.weights'
+    bias_name = layer_name + '.bias'
 
-    x, params = relay_soma_conv2d(x, layer_name, w_value, b_value, act=act, shift_bits=shift_bits)
+    # define relay input vars
+    w = relay.var(weights_name, relay.TensorType(w_value.shape, w_value.dtype))
+    b = relay.var(bias_name, relay.TensorType(b_value.shape, b_value.dtype))
 
-    # reshape to original (N x C)
-    x = relay.reshape(x, (1, w_value.shape[0]))
+    # define weights and bias values in params
+    params = {weights_name: w_value, bias_name: b_value}
+
+    # define operations
+    x = relay.op.nn.dense(input_tensor, w, out_dtype=b_value.dtype)
+    x = relay.op.nn.bias_add(x, b)
+    x = relay.op.right_shift(x, relay.const(shift_bits))
+    x = relay.op.clip(x, a_min=-128, a_max=127)
+    x = relay.op.cast(x, 'int8')
+
+    # Optional: ReLU
+    if act:
+        x = relay.op.clip(x, a_min=0, a_max=127)
 
     return x, params
 

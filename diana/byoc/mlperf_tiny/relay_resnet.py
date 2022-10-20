@@ -1,6 +1,7 @@
 from utils import (
         tvmc_compile_and_unpack,
         relay_soma_conv2d,
+        relay_soma_dense,
         create_demo_file,
         parse_cli_options,
         create_random_array
@@ -19,7 +20,7 @@ np.random.seed(0)
 
 def create_model(weight_bits):
     input_shape = (1, 3, 32, 32)
-    num_classes = 10
+    num_classes = 12    # NOTE originally 10, but made 12 to support diana accelerator
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     num_filters_1 = 16
@@ -86,15 +87,20 @@ def create_model(weight_bits):
     x = relay.nn.avg_pool2d(x, (8,8))
     x = relay.reshape(x, (1, num_filters_3))
 
-    # Dense, for now always 8-bits and on CPU
     weights_shape = (num_classes, num_filters_3)
-    weights = create_random_array(weights_shape, f'int8')
-    bias = create_random_array(weights_shape[0], f'int32')
-    w = relay.var("dense.weights", relay.TensorType(weights.shape, weights.dtype))
-    b = relay.var("dense.bias", relay.TensorType(bias.shape, bias.dtype))
-    x = relay.nn.dense(x, w, out_dtype="int32")
-    x = relay.op.nn.bias_add(x, b)
-    params_dense = {"dense.weights": weights, "dense.bias": bias}
+    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    bias = create_random_array(weights_shape[0], 'int32')
+    x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
+
+    # Dense, for now always 8-bits and on CPU
+    #weights_shape = (num_classes, num_filters_3)
+    #weights = create_random_array(weights_shape, f'int8')
+    #bias = create_random_array(weights_shape[0], f'int32')
+    #w = relay.var("dense.weights", relay.TensorType(weights.shape, weights.dtype))
+    #b = relay.var("dense.bias", relay.TensorType(bias.shape, bias.dtype))
+    #x = relay.nn.dense(x, w, out_dtype="int32")
+    #x = relay.op.nn.bias_add(x, b)
+    #params_dense = {"dense.weights": weights, "dense.bias": bias}
 
     x = relay.cast(x, 'float32')    # cast needed since softmax in TVM seems not to work with integer inputs
     x = relay.op.nn.softmax(x)
