@@ -43,7 +43,7 @@ def create_model(weight_bits):
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense4 = relay_soma_dense(x, 'dense4', weights, bias, act=True, shift_bits=4)
 
-    num_units_neck = 16     # NOTE: originally 8, but made 16 to support diana accelerator
+    num_units_neck = 8
     weights_shape = (num_units_neck, num_units)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
