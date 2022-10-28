@@ -15,7 +15,10 @@ cp $DORY_DIR/$DORY_HAL/include/encoders_instruction_memory.h $INCLUDE_DIR
 cp $DORY_DIR/$DORY_HAL/include/utils.h $INCLUDE_DIR
 
 cp $DORY_DIR/$DORY_HAL/src/digital_conv_2d.c $SRC_DIR
-#cp $DORY_DIR/$DORY_HAL/src/digital_element_wise_sum.c $SRC_DIR
+cp $DORY_DIR/$DORY_HAL/src/analog_conv_2d.c $SRC_DIR
+cp $DORY_DIR/$DORY_HAL/src/digital_element_wise_sum.c $SRC_DIR
+cp $DORY_DIR/$DORY_HAL/src/digital_depthwise_conv_2d.c $SRC_DIR
+cp $DORY_DIR/$DORY_HAL/src/digital_fully_connected.c $SRC_DIR
 cp $DORY_DIR/$DORY_HAL/src/encoders_instruction_memory.c $SRC_DIR
 cp $DORY_DIR/$DORY_HAL/src/utils.c $SRC_DIR
 
