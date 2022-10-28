@@ -255,6 +255,13 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c",
     https://discuss.tvm.apache.org/t/
     how-to-get-the-input-and-output-of-relay-call-node/8743
     '''
+    def get_c_type(dtype):
+        if dtype == "int8":
+            return "int8_t"
+        elif dtype == "float32":
+            return "float"
+        else:
+            raise NotImplementedError
     # Before you can get the input and output types of a relay node
     # you first have to run the InferType Relay pass
     # otherwise checked_type will return a ValueError
@@ -264,20 +271,20 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c",
     # Convert from TVM runtime datatype to numpy array
     input_shape = np.array(mod["main"].checked_type.arg_types[0].shape)
     input_dtype = mod["main"].checked_type.arg_types[0].dtype
+    type_decl_in = get_c_type(input_dtype)
     # Assuming there is only output to this Relay IRMod
     # Convert from TVM runtime datatype to numpy array
     output_shape = np.array(mod["main"].checked_type.ret_type.shape)
     output_dtype = mod["main"].checked_type.ret_type.dtype
+    type_decl_out = get_c_type(output_dtype)
     print("Creating demo file: Inferred shapes:")
     print(f"\tinput ({input_dtype}):")
     print(f"\t {input_shape}")
     print(f"\toutput ({output_dtype}):")
     print(f"\t {output_shape}")
-    malloc_statements =  \
-        """
-        int8_t *input = (int8_t*)malloc_wrapper(input_size * sizeof(int8_t));
-        int8_t *output = (int8_t*)malloc_wrapper(output_size * sizeof(int8_t));
-        """
+    malloc_statements = \
+    f"{type_decl_in} *input = ({type_decl_in}*)malloc_wrapper(input_size * sizeof({type_decl_in}));"+\
+    f"{type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));"
     free_statements = \
         """
         free_wrapper(input);
