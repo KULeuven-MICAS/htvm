@@ -48,6 +48,8 @@ OPT_LEVEL = 3
 # Use -DNDEBUG to remove assertions in TVM runtime
 # Use -DPULP for preprocessor in malloc wrapper
 PULP_CFLAGS = -Wall -pedantic -O$(OPT_LEVEL) -g $(INC_PATHS) -DNDEBUG -DPULP
+# Need to link in libm for math.h inclusion in softmax operator
+PULP_LDFLAGS += -lm
 # Uncomment to compile for the newer pulp-runtime, otherwise pulp-rt is used.
 # PULP_CFLAGS += -DRUNTIME_SOMA
 
@@ -56,8 +58,6 @@ PULP_CFLAGS = -Wall -pedantic -O$(OPT_LEVEL) -g $(INC_PATHS) -DNDEBUG -DPULP
 # The special rule modifiers (.PHONY etc...) go here
 
 #################################### RULES #####################################
-
-$(info $$STANDALONE_CRT_SRCS is [$(STANDALONE_CRT_SRCS)])
 
 include $(PULP_SDK_HOME)/install/rules/pulp.mk
 

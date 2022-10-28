@@ -59,7 +59,7 @@ $(BUILD_DIR)/libcodegen.a: $(CODEGEN_SRCS)
 
 $(BUILD_DIR)/demo: $(PWD)/src/demo.c $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o  $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/gdb_anchor.o $(BUILD_DIR)/libcodegen.a
 	mkdir -p $(@D)
-	$(CC) $(PKG_CFLAGS) -o  $@ $^
+	$(CC) $(PKG_CFLAGS) -o  $@ $^ -lm
 
 clean:
 	rm -f $(CODEGEN_OBJS) $(BUILD_DIR)/stack_allocator.o $(BUILD_DIR)/crt_backend_api.o $(BUILD_DIR)/libcodegen.a $(BUILD_DIR)/demo $(BUILD_DIR)/malloc_wrapper.o $(BUILD_DIR)/gdb_anchor.o
