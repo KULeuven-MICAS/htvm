@@ -247,7 +247,7 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
 
 
 def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c", 
-                     init_value: int = 1):
+                     init_value: int = 1, indefinite: bool = False):
     '''
     Function that creates a demo file in which inputs and outputs of the
     right size are allocated and setup automatically. Based on:
@@ -325,7 +325,15 @@ int main(int argc, char** argv) {
     struct tvmgen_default_inputs inputs = {
         .input = input,
     };
-    int32_t status = tvmgen_default_run(&inputs, &outputs);
+
+    int32_t status = 0;
+    """ + \
+    ("while (status == 0){   " if indefinite else "") + \
+    """
+         status = tvmgen_default_run(&inputs, &outputs);
+    """ + \
+    ("}" if indefinite else "") + \
+    """
     gdb_anchor();
     """ + \
         free_statements + \
@@ -335,7 +343,7 @@ int main(int argc, char** argv) {
     }
     return 0;
 }
-    """
+"""
     with open(path, "w") as file:
         file.writelines(c_code)
 
@@ -477,7 +485,7 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
                         default="pulp")
     parser.add_argument('--profile', dest='measurement',
                         help="Insert PULP performance counters into generated C code; for each individual kernel, for the entire TVM artefact, or don't insert performance counters (default)",
-                        choices=("individual", "global", None),
+                        choices=("individual", "global", "power", None),
                         default=None)
     parser.add_argument('--interactive', dest='interactive',
                         action='store_const', const=True,

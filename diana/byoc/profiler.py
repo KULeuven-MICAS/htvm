@@ -338,7 +338,7 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
                     interactive=False,
                     measurement="individual"):
     # Skip early in this case
-    if measurement == None:
+    if measurement == None or "power":
         return
     lib1_file_name = codegen_dir + "default_lib1.c"
     lib0_file_name = codegen_dir + "default_lib0.c"
