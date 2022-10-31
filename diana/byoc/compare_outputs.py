@@ -34,8 +34,8 @@ def get_gdb_output(gdb_log_path="debug/gdb.txt"):
             # makes a list of numbers in string format
             list_numbers = string.split(",")
             # convert strings to integers
-            values = [int(number) for number in list_numbers]
-        values_from_test = np.array(values, dtype="int8")
+            values = [float(number) for number in list_numbers]
+        values_from_test = np.array(values, dtype="float")
         # Values are returned from GDB in one big one-dimensional tensor
         # Reshaping here such that it matches the output
         return values_from_test

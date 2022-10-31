@@ -276,6 +276,7 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c",
     # Convert from TVM runtime datatype to numpy array
     output_shape = np.array(mod["main"].checked_type.ret_type.shape)
     output_dtype = mod["main"].checked_type.ret_type.dtype
+    create_demo_gdb_scripts(output_dtype)
     type_decl_out = get_c_type(output_dtype)
     print("Creating demo file: Inferred shapes:")
     print(f"\tinput ({input_dtype}):")
@@ -382,6 +383,46 @@ def make(device: str = "pulp", verbose: bool = False):
         print(output)
     print(f"Make: Built for '{device}'")
 
+def create_demo_gdb_scripts(dtype : str = "int8"):
+    def get_gdb_type(dtype):
+        if dtype == "int8":
+            return "/d"
+        elif dtype == "float32":
+            return "/f"
+        else:
+            raise NotImplementedError()
+    preamble =\
+    'set print elements 0\n' +\
+    'set print repeats 0\n' +\
+    'set pagination off\n'
+    # These parts are not common
+    x86 = '!rm demo_x86.txt\n' + preamble +\
+    'break gdb_anchor\n' +\
+    'run\n' +\
+    'n\n' +\
+    'n\n' +\
+    'n\n' +\
+    'set logging file demo_x86.txt\n'
+    pulp = '!rm demo.txt\n' + preamble +\
+    'target remote localhost:3333\n' +\
+    'load\n' +\
+    'break gdb_anchor\n' +\
+    'c\n' +\
+    'n\n' +\
+    'n\n' +\
+    'set logging file demo.txt\n'
+    # These parts are common again
+    common =\
+    'set logging on\n' +\
+    f'print {get_gdb_type(dtype)} *output@output_size\n' +\
+    'set logging off\n' +\
+    'quit'
+    with open("gdb_demo_x86.sh", "w") as gdb_script:
+        gdb_script.write(x86 + common)
+        print(f"Made gdb_demo_x86.sh for {dtype}")
+    with open("gdb_demo.sh", "w") as gdb_script:
+        gdb_script.write(pulp + common)
+        print(f"Made gdb_demo.sh for {dtype}")
 
 def gdb(device: str, binary: str, gdb_script: str, verbose : bool = False):
     print(f"GDB: Running '{gdb_script}' on '{device}'")
@@ -406,7 +447,16 @@ def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
 
 
 def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False):
-    input("Now run the pulp script yourself")
+    input("Please start OpenOCD on port 3333...")
+    riscv_gdb = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-gdb"
+    """
+    NOTE for some reason this program exits with zero even after errors?
+    """
+    output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
+                                      "-batch"],
+                                     stderr=subprocess.STDOUT,
+                                     timeout=10,
+                                     universal_newlines=True) 
     return
     
 
