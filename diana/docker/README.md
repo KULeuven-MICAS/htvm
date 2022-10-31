@@ -50,7 +50,7 @@ $ podman build . -f diana/docker/Dockerfile.tutorial -t tvm-fork-tuto
 
 ```
 
-This container image can be used in two different ways:
+This container image can be used in a few different ways:
 1. `terminal`: from the root of the repository run:
 	```sh
 	$ podman run -it -v=`pwd`:/tvm-fork:z tvm-fork-tuto bash
@@ -63,6 +63,11 @@ This container image can be used in two different ways:
 	This exposes your host repository files to the container (like mentioned above) and also
 	exposes port 8888 of the container to port 8888 of the host.
 	You should now be able to access the `jupyterlab` interface by clicking the link that starts with `https://127.0.0.1:8888/...`
+3. If you want to use gdb from inside the container, you can bind the local domain to the container's and connect to a debugging session over TCP like so:
+    ```sh
+    $ podman run -it --net=host -v=`pwd`:/tvm-fork:z tvm-fork-tuto bash
+    ``` 
+    Note that using the `--net=host` imposes certain security risks which should be taken into account.
 
 **Note: Be extra careful when using SSH credentials inside of the container with jupyterlab.
 If you expose jupyterlab without a password or token (turned on by default),

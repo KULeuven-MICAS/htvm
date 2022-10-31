@@ -1,9 +1,11 @@
 FROM registry.gitlab.com/soma_compiler/tvm-fork:latest
 
-# install dependencies for pulp toolchain
-RUN pip install prettytable pyelftools jupyterlab
+# install dependencies for pulp toolchain and quantlib (second line)
+RUN pip install prettytable pyelftools jupyterlab \
+    torch torchvision networkx onnx onnxruntime
 # install curl and get precompiled pulp-riscv-gnu-toolchain from github
-RUN apt-get update && apt-get install curl -y &&\
+# libncurses5 is needed for using pulps gdb
+RUN apt-get update && apt-get install curl libncurses5 -y &&\
     mkdir /pulp-riscv-gnu-toolchain &&\
     curl -L https://github.com/pulp-platform/pulp-riscv-gnu-toolchain/releases/download/v1.0.16/v1.0.16-pulp-riscv-gcc-ubuntu-18.tar.bz2 --output /pulp-riscv-gnu-toolchain/gcc.tar.bz2 -s &&\ 
     cd /pulp-riscv-gnu-toolchain &&\
@@ -21,8 +23,7 @@ RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\
     echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
     echo "alias python=python3" >> /etc/bash.bashrc
 
-# install requirements for quantlib
-RUN pip install torch torchvision networkx onnx onnxruntime
+
 # set SHELL environment variable to bin bash so jupyter terminal uses bash instead of sh
 ENV SHELL=/bin/bash
 # Start up jupyter from the /tvm-fork folder
