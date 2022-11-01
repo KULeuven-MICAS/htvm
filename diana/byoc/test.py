@@ -1,14 +1,6 @@
 import relay_resnet20
-from compare_outputs import get_gdb_output
 from tvm.driver.tvmc.model import TVMCModel
-from utils import (
-                   tvmc_compile_and_unpack,
-                   create_demo_file,
-                   create_random_array,
-                   adapt_gcc_opt,
-                   make,
-                   gdb
-                  )
+import utils
 import numpy as np
 
 import tvm.relay as relay
@@ -28,42 +20,47 @@ import tvm
 # for reproducability
 np.random.seed(0)
 mod, params = create_model(8)
-print(params)
+#mod, params = create_model(2)
 
 model = TVMCModel(mod, params)
 #init_value = -2
 init_value = 1
 
+
 # run on X86 to get demo_x86.txt
-print("TEST: Running on X86")
+print("TEST: Compiling for X86")
 device = "x86"
 target = "c"
 fusion = False
-tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
-create_demo_file(mod, init_value=init_value)
-adapt_gcc_opt("Makefile.x86", 0)
-make(device)
-gdb(device, "build/demo", "gdb_demo_x86.sh")
-print("TEST: parsing X86 output")
-
-demo_x86 = get_gdb_output("demo_x86.txt")
-
+utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
+utils.create_demo_file(mod, init_value=init_value)
+utils.adapt_gcc_opt("Makefile.x86", 0)
+utils.make(device)
+print("TEST: obtaining X86 output")
+result_x86 = utils.gdb(device, "build/demo", "gdb_demo_x86.sh")
+print(result_x86)
 
 # run on X86 to get demo_x86.txt
-print("TEST: Running on Diana")
+print("TEST: compiling for Diana")
 device = "pulp"
 target = "soma_dory, c"
 fusion = True
-tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
-create_demo_file(mod, init_value=init_value)
-adapt_gcc_opt("Makefile.pulprt", 3)
-make(device)
-gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
-print("TEST: parsing PULP output")
+utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
+utils.create_demo_file(mod, init_value=init_value)
+utils.adapt_gcc_opt("Makefile.pulprt", 3)
+utils.make(device)
+result_pulp = utils.gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
+print("TEST: obtaining Diana output")
+print(result_pulp)
 
-demo_pulp = get_gdb_output("demo.txt")
-
-if np.ma.allequal(demo_x86,demo_pulp):
+print("Final Results")
+print("=============")
+print("X86 output:")
+print(result_x86)
+print("Diana output:")
+print(result_pulp)
+if np.ma.allequal(result_x86,result_pulp):
     print("TEST: PASS")
 else:
     print("TEST: FAIL")
+
