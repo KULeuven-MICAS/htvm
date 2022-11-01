@@ -180,7 +180,8 @@ def create_random_array(shape: Tuple[int, ...], dtype: str) -> tvm.nd.array:
 
 
 def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
-                 fuse_layers: bool = True, package_path: str = "model.tar"):
+                 fuse_layers: bool = True, 
+                 package_path: pathlib.Path = pathlib.Path("model.tar")):
     '''
     Utility wrapper for TVMC that sets supported
     :param model: TVMC model that you wish to compile
@@ -432,19 +433,31 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
         gdb_script.write(pulp + common)
         print(f"Made gdb_demo.sh for {dtype}")
 
-def gdb(device: str, binary: str, gdb_script: str, verbose : bool = False):
-    print(f"GDB: Running '{gdb_script}' on '{device}'")
+def gdb(device: str, binary: str = None, gdb_script: str = None, 
+        verbose : bool = False) -> str:
+    """
+    Calls gdb run (batch mode) for binary with gdb_script on specified device
+    If verbose is set, output is printed
+
+    returns the gdb output
+    """
     if device == "x86":
-        gdb_x86(gdb_script, binary, verbose)
+        binary = "build/demo" if binary is None else binary
+        gdb_script = "gdb_demo_x86.sh" if gdb_script is None else gdb_script
+        print(f"GDB: Running '{gdb_script}' on '{device}'")
+        out = gdb_x86(gdb_script, binary, verbose)
         print("GDB: Run on x86 finished")
     elif device == "pulp":
-        gdb_pulp(gdb_script, binary, verbose)
+        binary = "build/pulpissimo/demo/demo" if binary is None else binary
+        gdb_script = "gdb_demo.sh" if gdb_script is None else gdb_script
+        out = gdb_pulp(gdb_script, binary, verbose)
         print("GDB: Run on PULP finished")
     else:
         raise ValueError(f"Device: '{device}' not supported")
+    return out
 
 
-def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
+def gdb_x86(gdb_script: str, binary: str, verbose: bool = False) -> str:
     output = subprocess.check_output(["gdb", binary, "-x", gdb_script, 
                                       "-batch"],
                                      stderr=subprocess.STDOUT,
@@ -452,23 +465,28 @@ def gdb_x86(gdb_script: str, binary: str, verbose: bool = False):
                                      universal_newlines=True) 
     if verbose:
         print(output)
+    return output
 
 
-def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False):
+def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str: 
     input("Please start OpenOCD on port 3333...")
     riscv_gdb = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-gdb"
     """
     NOTE for some reason this program exits with zero even after errors?
+    https://sourceware.org/bugzilla/show_bug.cgi?id=13000
+    (Bug was fixed in 2018)
     """
     output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
                                       "-batch"],
                                      stderr=subprocess.STDOUT,
                                      timeout=10,
                                      universal_newlines=True) 
-    return
+    if verbose:
+        print(output)
+    return output
     
 
-def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
+def parse_cli_options() -> Tuple[argparse.Namespace, str]:
     '''
     Utility function that reads arguments from command line
     usage: see script_name.py -h
@@ -519,5 +537,12 @@ def parse_cli_options() -> Tuple[str, Optional[str], bool, bool, int]:
         elif args.device == "x86":
             args.makefile = "Makefile.x86"
     adapt_gcc_opt(args.makefile, args.gcc_opt)
-    return (args.target, args.device, args.measurement, args.interactive,
-            args.fusion, args.weight_bits, args.gcc_opt)
+    # Return string which identifies options
+    def get_options_string(args: argparse.Namespace):
+        fusion_name = "fused" if args.fusion else "unfused"
+        target_name = "dory" if args.target == "soma_dory, c" else "c"
+        options_string = f"{args.device}_{target_name}_{fusion_name}" + \
+                   f"_O{args.gcc_opt}_{args.measurement}"
+        return options_string
+
+    return args, get_options_string(args)
