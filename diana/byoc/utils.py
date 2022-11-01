@@ -405,14 +405,14 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
     'set print repeats 0\n' +\
     'set pagination off\n'
     # These parts are not common
-    x86 = '!rm demo_x86.txt\n' + preamble +\
+    x86 = preamble +\
     'break gdb_anchor\n' +\
     'run\n' +\
     'n\n' +\
     'n\n' +\
     'n\n' +\
     'set logging file demo_x86.txt\n'
-    pulp = '!rm demo.txt\n' + preamble +\
+    pulp = preamble +\
     'target remote localhost:3333\n' +\
     'load\n' +\
     'break gdb_anchor\n' +\
@@ -434,27 +434,49 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
         print(f"Made gdb_demo.sh for {dtype}")
 
 def gdb(device: str, binary: str = None, gdb_script: str = None, 
-        verbose : bool = False) -> str:
+        verbose : bool = False) -> np.typing.NDArray:
     """
     Calls gdb run (batch mode) for binary with gdb_script on specified device
     If verbose is set, output is printed
 
-    returns the gdb output
+    returns the parsed gdb output in a numpy float array
     """
+    def print_error(log_file, gdb_output):
+        print(f"Could not open {log_file} -> gdb output was:")
+        print("============================================")
+        print(gdb_output)
     if device == "x86":
+        log = pathlib.Path("demo_x86.txt")
+        # Remove previous log before proceeding
+        log.unlink(missing_ok=True)
         binary = "build/demo" if binary is None else binary
         gdb_script = "gdb_demo_x86.sh" if gdb_script is None else gdb_script
-        print(f"GDB: Running '{gdb_script}' on '{device}'")
+        print(f"GDB: Running '{gdb_script}' on '{device}'...")
         out = gdb_x86(gdb_script, binary, verbose)
         print("GDB: Run on x86 finished")
+        try:
+            result = get_gdb_output("demo_x86.txt")
+        except FileNotFoundError as e:
+            print_error(log, out)
+            exit(1)
+        return result
     elif device == "pulp":
+        log = pathlib.Path("demo.txt")
+        # Remove previous log before proceeding
+        log.unlink(missing_ok=True)
         binary = "build/pulpissimo/demo/demo" if binary is None else binary
         gdb_script = "gdb_demo.sh" if gdb_script is None else gdb_script
+        print(f"GDB: Running '{gdb_script}' on '{device}'...")
         out = gdb_pulp(gdb_script, binary, verbose)
         print("GDB: Run on PULP finished")
+        try:
+            result = get_gdb_output(log)
+        except FileNotFoundError as e:
+            print_error(log, out)
+            exit(1)
+        return result
     else:
         raise ValueError(f"Device: '{device}' not supported")
-    return out
 
 
 def gdb_x86(gdb_script: str, binary: str, verbose: bool = False) -> str:
@@ -469,7 +491,6 @@ def gdb_x86(gdb_script: str, binary: str, verbose: bool = False) -> str:
 
 
 def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str: 
-    input("Please start OpenOCD on port 3333...")
     riscv_gdb = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-gdb"
     """
     NOTE for some reason this program exits with zero even after errors?
@@ -479,11 +500,51 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
                                       "-batch"],
                                      stderr=subprocess.STDOUT,
-                                     timeout=10,
+                                     timeout=25,
                                      universal_newlines=True) 
     if verbose:
         print(output)
     return output
+    
+
+def get_gdb_output(gdb_log_path="debug/gdb.txt"):
+    """
+    Following lines use the logging output of gdb to match test results with model results
+
+    logging is set by:
+        (gdb) set logging on       --> log to gdb.txt
+        (gdb) print some_variable
+        $1 = \032
+        (gdb) set logging off
+
+    In the code below we use regex to match an output created by gdb for an array:
+        (gdb) print *my_array@array_size
+        $2 = { 69, 420, ... , 42}  --> will be logged to gdb.txt
+
+    After some string manipulation this array is converted to a numpy array.
+    This array is checked for a complete match with np.ma.allequal()
+
+    raises FileNotFoundError in case the log file can not be opened
+    """
+    with open(gdb_log_path) as log:
+        data = ""
+        for line in log.readlines():
+            data += line.strip()
+        # Find the right string in gdb log
+        matcher = re.compile(r"{.*}",flags=re.DOTALL)
+        result = matcher.search(data)
+        string = result.group(0)
+        # "{ ... , ... }" --> "... , ..."
+        string = string.replace("{","")
+        string = string.replace("}","")
+        # makes a list of numbers in string format
+        list_numbers = string.split(",")
+        # convert strings to integers
+        values = [float(number) for number in list_numbers]
+    values_from_test = np.array(values, dtype="float")
+    # Values are returned from GDB in one big one-dimensional tensor
+    # Reshaping here such that it matches the output
+    return values_from_test
     
 
 def parse_cli_options() -> Tuple[argparse.Namespace, str]:
