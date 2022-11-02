@@ -66,6 +66,15 @@ def fully_connected_pattern():
     return _biasadd_requant_clip_pattern(fc)
 
 
+def add_pattern():
+    """Create pattern for add with optional fused relu."""
+    add = is_op("add")(
+            wildcard(),wildcard()
+    )
+    return add
+    return _biasadd_requant_clip_pattern(add)
+
+
 def _check_biasadd_requant_clip(pattern):
     """Check if bias_add-requant-clip pattern is supported by the soma dory accelerator
     Returns None if not supported, returns the linear op before this sequence if supported
@@ -118,7 +127,7 @@ def check_conv2d(pattern):
             attr = list(attr)
 
         if attr not in supported_values:
-            logger.warning(f"Expected qnn.conv2d {name} to be one of {supported_values}, but got {attr}. \
+            logger.warning(f"Expected nn.conv2d {name} to be one of {supported_values}, but got {attr}. \
                             Acceleration for this conv2d is not supported")
             return False
 
@@ -154,6 +163,24 @@ def check_fully_connected(pattern):
     return True
 
 
+def check_add(pattern):
+    """Check if the add layer is supported by the soma dory accelerator"""
+    tensor_shape_a = list(pattern.args[0].checked_type.shape)
+    tensor_shape_b = list(pattern.args[1].checked_type.shape)
+    if tensor_shape_a != tensor_shape_b:
+        logger.warning(f"Tensor shapes for add don't match:\n"+\
+                " Tensor a: {tensor_shape_a}\n" + \
+                " Tensor b: {tensor_shape_b}\n" + \
+                "acceleration for this add is not supported")
+        return False
+# TODO Add support for this
+#    add = _check_biasadd_requant_clip(pattern)
+#    if add is None:
+#        return False
+#
+    return True
+
+
 def pattern_table():
     """
     Registers the patterns we want to match.
@@ -165,6 +192,7 @@ def pattern_table():
     return [
         ("soma_dory.conv2d", conv2d_pattern(), check_conv2d),
         ("soma_dory.dense", fully_connected_pattern(), check_fully_connected),
+        ("soma_dory.add", add_pattern(), check_add),
     ]
 
 
