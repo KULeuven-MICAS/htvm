@@ -248,7 +248,8 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
 
 
 def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c", 
-                     init_value: int = 1, indefinite: bool = False):
+                     init_value: int = 1, indefinite: bool = False, 
+                     boot_analog: bool = False):
     '''
     Function that creates a demo file in which inputs and outputs of the
     right size are allocated and setup automatically. Based on:
@@ -279,40 +280,48 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c",
     output_dtype = mod["main"].checked_type.ret_type.dtype
     create_demo_gdb_scripts(output_dtype)
     type_decl_out = get_c_type(output_dtype)
+    if boot_analog:
+        analog_boot_include = "#include <utils.h>\n"
+        analog_boot_code = "boot_diana();"
+    else:
+        analog_boot_include = ""
+        analog_boot_code = ""
     print("Creating demo file: Inferred shapes:")
     print(f"\tinput ({input_dtype}):")
     print(f"\t {input_shape}")
     print(f"\toutput ({output_dtype}):")
     print(f"\t {output_shape}")
     malloc_statements = \
-    f"{type_decl_in} *input = ({type_decl_in}*)malloc_wrapper(input_size * sizeof({type_decl_in}));"+\
-    f"{type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));"
+    f"    {type_decl_in} *input = ({type_decl_in}*)malloc_wrapper(input_size * sizeof({type_decl_in}));\n"+\
+    f"    {type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));"
     free_statements = \
         """
         free_wrapper(input);
         free_wrapper(output);
         """
     c_code = \
-        f""" #include <stdio.h>
+        f"""#include <stdio.h>
 #include <stdint.h>
 #include "tvmgen_default.h"
 #include <tvm_runtime.h>
 #include <malloc_wrapper.h>
-#include <gdb_anchor.h>
-    """ + \
-        """
+#include <gdb_anchor.h>\n""" +\
+    analog_boot_include +\
+    """
 int abs(int v) {return v * ((v > 0) - (v < 0)); }
 
 int main(int argc, char** argv) {
+    """ +\
+    analog_boot_code +\
+    """
     tvm_workspace_t app_workspace;
     static uint8_t g_aot_memory[TVMGEN_DEFAULT_WORKSPACE_SIZE];
-    StackMemoryManager_Init(&app_workspace, g_aot_memory, TVMGEN_DEFAULT_WORKSPACE_SIZE);
-    // Sizes automatically added by utils.create_demo_file
-    """ + \
-        f"\tuint32_t input_size = {np.prod(input_shape)};\n" + \
-        f"\tuint32_t output_size = {np.prod(output_shape)};\n" + \
-        malloc_statements + \
-        """
+    StackMemoryManager_Init(&app_workspace, g_aot_memory, TVMGEN_DEFAULT_WORKSPACE_SIZE);\n
+    // Sizes automatically added by utils.create_demo_file\n""" + \
+    f"    uint32_t input_size = {np.prod(input_shape)};\n" + \
+    f"    uint32_t output_size = {np.prod(output_shape)};\n" + \
+    malloc_statements + \
+    """\n
     // Fill first input with ones
     for (uint32_t i = 0; i < input_size; i++){
     """ + \
