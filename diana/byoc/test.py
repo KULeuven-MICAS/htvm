@@ -11,56 +11,61 @@ from relay_simple import create_model
 #from mlperf_tiny.relay_mobilenet import create_model
 #from mlperf_tiny.relay_resnet import create_model
 
-from utils import relay_soma_conv2d
-import tvm
-
-
-#import resnet20 model
 
 # for reproducability
 np.random.seed(0)
-mod, params = create_model(8)
-#mod, params = create_model(2)
+
+# Set precision to 2 for triggering analog core
+precision = 8
+
+mod, params = create_model(precision)
 
 model = TVMCModel(mod, params)
 #init_value = -2
 init_value = 1
 
+# int2 verification is not available on X86
+if precision != 2:
+    # run on X86
+    print("TEST: Compiling for X86")
+    device = "x86"
+    target = "c"
+    fusion = False
+    utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
+    utils.create_demo_file(mod, init_value=init_value)
+    utils.adapt_gcc_opt("Makefile.x86", 0)
+    utils.make(device)
+    print("TEST: obtaining X86 output")
+    result_x86 = utils.gdb(device, "build/demo", "gdb_demo_x86.sh")
+    print(result_x86)
 
-# run on X86 to get demo_x86.txt
-print("TEST: Compiling for X86")
-device = "x86"
-target = "c"
-fusion = False
-utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
-utils.create_demo_file(mod, init_value=init_value)
-utils.adapt_gcc_opt("Makefile.x86", 0)
-utils.make(device)
-print("TEST: obtaining X86 output")
-result_x86 = utils.gdb(device, "build/demo", "gdb_demo_x86.sh")
-print(result_x86)
-
-# run on X86 to get demo_x86.txt
+# run on Diana
 print("TEST: compiling for Diana")
 device = "pulp"
 target = "soma_dory, c"
 fusion = True
 utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
-utils.create_demo_file(mod, init_value=init_value)
+# Add analog boot code in case of precision
+if precision == 2:
+    utils.create_demo_file(mod, init_value=init_value, boot_analog=True)
+else:
+    utils.create_demo_file(mod, init_value=init_value)
 utils.adapt_gcc_opt("Makefile.pulprt", 3)
 utils.make(device)
 result_pulp = utils.gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
 print("TEST: obtaining Diana output")
 print(result_pulp)
 
-print("Final Results")
-print("=============")
-print("X86 output:")
-print(result_x86)
-print("Diana output:")
-print(result_pulp)
-if np.ma.allequal(result_x86,result_pulp):
-    print("TEST: PASS")
+if precision == 2:
+    print("TEST: Verification for int2 is not supported on X86")
 else:
-    print("TEST: FAIL")
-
+    print("Final Results")
+    print("=============")
+    print("X86 output:")
+    print(result_x86)
+    print("Diana output:")
+    print(result_pulp)
+    if np.ma.allequal(result_x86,result_pulp):
+        print("TEST: PASS")
+    else:
+        print("TEST: FAIL")
