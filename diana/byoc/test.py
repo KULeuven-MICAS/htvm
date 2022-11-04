@@ -4,8 +4,11 @@ import utils
 import numpy as np
 
 import tvm.relay as relay
-from relay_simple import create_model
+#from relay_simple import create_model
 #from relay_resnet20 import create_model
+from single_layer.relay_dense import create_model
+#from single_layer.relay_conv2d import create_model
+#from single_layer.relay_dw_conv2d import create_model
 #from mlperf_tiny.relay_dae import create_model
 #from mlperf_tiny.relay_ds_cnn import create_model
 #from mlperf_tiny.relay_mobilenet import create_model
