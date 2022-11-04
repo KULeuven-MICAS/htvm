@@ -2,7 +2,7 @@
 BUILD_DIR := build
 
 # Note that this value can automatically be changed by python scripts:
-OPT_LEVEL = 3
+OPT_LEVEL = 0
 
 # Compiler options
 PKG_COMPILE_OPTS = -Wall -O$(OPT_LEVEL) -std=gnu99 #-fsanitize=address
