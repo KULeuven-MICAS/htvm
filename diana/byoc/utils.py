@@ -506,11 +506,18 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     https://sourceware.org/bugzilla/show_bug.cgi?id=13000
     (Bug was fixed in 2018)
     """
-    output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
-                                      "-batch"],
-                                     stderr=subprocess.STDOUT,
-                                     timeout=25,
-                                     universal_newlines=True) 
+    timeout=25
+    try:
+        output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
+                                          "-batch"],
+                                         stderr=subprocess.STDOUT,
+                                         timeout=timeout,
+                                         universal_newlines=True) 
+    except subprocess.TimeoutExpired as e:
+        print(f"GDB timed out after {timeout} seconds! --> Output:")
+        print("==================================================")
+        print(e.stdout.decode())
+        exit(1)
     if verbose:
         print(output)
     return output
