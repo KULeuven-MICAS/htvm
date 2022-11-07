@@ -1,11 +1,13 @@
 from utils import (
         tvmc_compile_and_unpack,
+        relay_soma_layout_transform,
         relay_soma_dense,
         create_demo_file,
         parse_cli_options,
         create_random_array
         )
 from profiler import insert_profiler
+import os
 import tvm
 import tvm.relay as relay
 import tvm.relay.transform as transform
@@ -14,13 +16,14 @@ from tvm.driver.tvmc.compiler import compile_model
 from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
-# for reproducability
-np.random.seed(0)
 
-def create_model(weight_bits):
+def create_model(weight_bits, add_layout_transforms):
     input_shape = (1, 640)
     num_outputs = input_shape[1]
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
+
+    if add_layout_transforms:
+        x = relay_soma_layout_transform(x, input_shape)
 
     num_units = 128
     weights_shape = (num_units, input_shape[1])
@@ -74,6 +77,9 @@ def create_model(weight_bits):
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense10 = relay_soma_dense(x, 'dense10', weights, bias, act=False, shift_bits=4)
 
+    if add_layout_transforms:
+        x = relay_soma_layout_transform(x, (1, num_outputs))
+
     params_dense1.update(params_dense2)
     params_dense1.update(params_dense3)
     params_dense1.update(params_dense4)
@@ -93,17 +99,24 @@ def create_model(weight_bits):
 
 
 if __name__ == "__main__":
-    target, measurement, interactive, fusion, weight_bits, gcc_opt = parse_cli_options()
+    # for reproducability
+    np.random.seed(0)
+    # Get options from cli
+    args, opt_string = parse_cli_options()
+
+    add_layout_transforms = False
+    if args.manual_layout_transform and 'soma_dory' in args.target:
+        args.target = args.target.replace('soma_dory', 'soma_dory -layout_transform=0')
+        add_layout_transforms = True
+
     # create the model
-    mod, params = create_model(weight_bits)
+    mod, params = create_model(args.weight_bits, add_layout_transforms)
     model = TVMCModel(mod, params)
+
     # compile the model
-    tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
+    tvmc_compile_and_unpack(model, target=args.target, fuse_layers=args.fusion)
     create_demo_file(mod, path='../src/demo.c')
-    fusion_name = "fused" if fusion else "unfused"
-    target_name = "dory" if target == "soma_dory, c" else "c"
-    csv_name = f"relay_simple_{target_name}_{fusion_name}" + \
-               f"_O{gcc_opt}_{measurement}.csv"
-    insert_profiler(measurement=measurement,
-                    interactive=interactive,
-                    csv_file=csv_name)
+    basename_this_file = os.path.splitext(os.path.basename(__file__))[0]
+    insert_profiler(measurement=args.measurement,
+                    interactive=args.interactive,
+                    csv_file=f"{basename_this_file}_{opt_string}.csv")

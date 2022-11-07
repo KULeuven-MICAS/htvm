@@ -35,6 +35,18 @@ def numpy_to_array(np_arr: npt.NDArray, dtype: str):
     return arr
 
 
+def relay_soma_layout_transform(x, shape):
+    """
+    Creates a relay layout transform that reverses chunks of four bytes
+    """
+
+    x = relay.reshape(x, (np.prod(shape) // 4, 4))
+    x = relay.reverse(x, axis=1)
+    x = relay.reshape(x, shape)
+
+    return x
+
+
 def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                       w_value: tvm.nd.array,
                       b_value: tvm.nd.array,
@@ -192,7 +204,7 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
         This can be useful when debuggin the TVM-generated c code kernels.
     '''
     # Check arguments
-    assert ((target == "soma_dory, c") or (target == "c"))
+    #assert ((target == "soma_dory, c") or (target == "c"))
     # Add -device=arm_cpu as default device for TVM C codegen
     # This will use the arm_cpu relay strategy as opposed to the x86 one.
     target += " -device=arm_cpu"
@@ -590,6 +602,9 @@ def parse_cli_options() -> Tuple[argparse.Namespace, str]:
                         help="Set TVM's Relay Fusion pass maximum fusion depth to 0",
                         action='store_const', const=False,
                         default=True)
+    parser.add_argument('--manual-layout-transform',
+                        help="Insert hand-tuned layout transform locations rather than automatically",
+                        action='store_true')
     parser.add_argument('--weight-bits', dest='weight_bits', type=int,
                         help="Number of bits per weight. This affects the selection of the digital/analog core",
                         choices=(8, 2),

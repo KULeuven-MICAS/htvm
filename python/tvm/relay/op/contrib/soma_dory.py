@@ -183,18 +183,20 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
     if params:
         mod["main"] = bind_params_by_name(mod["main"], params)
 
-    seq = tvm.transform.Sequential(
-        [
+    pipeline = [
             SomaDoryGraphQuantizer('int8'),
             transform.InferType(),
             transform.MergeComposite(pattern_table()),
             transform.AnnotateTarget(["soma_dory"]),
-            SomaDoryLayoutTransform(),
             transform.InferType(),
             transform.PartitionGraph(),
             transform.InferType(),
         ]
-    )
+
+    if 'layout_transform' not in opts or opts['layout_transform'] != '0':
+        pipeline.insert(4, SomaDoryLayoutTransform())
+
+    seq = tvm.transform.Sequential(pipeline)
 
     with tvm.transform.PassContext(opt_level=3):
         try:
