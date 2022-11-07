@@ -56,11 +56,13 @@ def generate_gdb_script(kernel_counters, logging_file="profile.txt",
     if measurement == "individual":
         for kernel_counter in kernel_counters:
             body += f"print {kernel_counter}\n"
-    else:
-    # global measurement
+    elif measurement == "global":
         body += "print perf_cyc\n"
-    closing = "set logging off\n" + \
-        "quit\n"
+    else:
+    # memory measurement
+        body += "print peak_l2_alloc\n" +\
+                "print current_l2_alloc\n"
+    closing = "set logging off\n"
     return preamble + body + closing
 
 
@@ -269,8 +271,14 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
                     interactive=False,
                     measurement="individual"):
     # Remove possible previous measurement
-    pathlib.Path(gdb_log_name).unlink()
+    pathlib.Path(gdb_log_name).unlink(missing_ok=True)
     # Skip early in this case
+    if measurement == "memory":
+        # At the end of the gdb script add extra prints
+        with open(gdb_script_name, "a") as gdb_script:
+            gdb_script.write(generate_gdb_script(None, "memory.txt",
+                             measurement = measurement))
+        return
     if measurement is None or measurement == "power":
         return
     lib1_file_name = codegen_dir + "default_lib1.c"
@@ -294,7 +302,7 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
 
 def process_profiler(measurement, kernels, log_file="profile.txt", 
                      csv_file="profile.csv"):
-    log_results = parse_gdb_log()
+    log_results = parse_gdb_log(log_file)
     if measurement == "individual":
         result = DianaResult(kernels, log_results)
         print("\n-----  RESULTS ------")
@@ -303,7 +311,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         result.print_total_cycles()
         print(f"\nExporting CSV results to \"{csv_file}\", exiting")
         result.write_csv(csv_file)
-    else:
+    elif measurement == "global":
         # global measurement
         global_cycles = log_results[0]
         clock_freq = 200e6
@@ -316,6 +324,17 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         print(f"Exporting CSV results to \"{csv_file}\", exiting")
         with open(csv_file, "w") as csv:
             csv.write(f"{csv_file}_total,{global_cycles}\n")
+    else: #measurement == "memory"
+        peak_l2_memory_usage = log_results[0]
+        current_l2_memory_usage = log_results[1]
+        print("\n----- MEMORY USAGE -----")
+        print(f"L2 Peak heap allocation : {peak_l2_memory_usage:12,} bytes")
+        print(f"L2 heap allocation @gdb_anchor : {current_l2_memory_usage:,} bytes\n")
+        print(f"Exporting CSV results to \"{csv_file}\", exiting")
+        with open(csv_file, "w") as csv:
+            csv.write(f"{csv_file}_peak_memory,{peak_l2_memory_usage}\n")
+            csv.write(f"{csv_file}_current_memory,{current_l2_memory_usage}\n")
+
 
 
 if __name__ == "__main__":

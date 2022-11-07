@@ -61,6 +61,12 @@ kernels = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
                                    csv_file = "profile.csv",
                                    interactive = False,
                                    measurement = measurement)
+kernels = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
+                                   gdb_script_name = "./gdb_demo.sh",
+                                   csv_file = "memory.csv",
+                                   gdb_log_name= "memory.txt",
+                                   interactive = False,
+                                   measurement = "memory")
 utils.make(device)
 result_pulp = utils.gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
 print("TEST: obtaining Diana output")
@@ -80,3 +86,6 @@ else:
     else:
         print("TEST: FAIL")
 perf_counters = profiler.process_profiler(measurement, kernels)
+perf_counters = profiler.process_profiler("memory", kernels=None,
+                                          log_file="memory.txt",
+                                          csv_file="memory.csv")
