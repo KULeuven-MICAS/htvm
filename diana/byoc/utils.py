@@ -473,8 +473,7 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
     common =\
     'set logging on\n' +\
     f'print {get_gdb_type(dtype)} *output@output_size\n' +\
-    'set logging off\n' +\
-    'quit'
+    'set logging off\n'
     with open("gdb_demo_x86.sh", "w") as gdb_script:
         gdb_script.write(x86 + common)
         print(f"Made gdb_demo_x86.sh for {dtype}")
@@ -546,7 +545,7 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     https://sourceware.org/bugzilla/show_bug.cgi?id=13000
     (Bug was fixed in 2018)
     """
-    timeout=25
+    timeout=30
     try:
         output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
                                           "-batch"],

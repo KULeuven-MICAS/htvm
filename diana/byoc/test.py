@@ -2,6 +2,7 @@ import relay_resnet20
 from tvm.driver.tvmc.model import TVMCModel
 import utils
 import numpy as np
+import profiler
 
 import tvm.relay as relay
 #from relay_simple import create_model
@@ -54,6 +55,11 @@ if precision == 2:
 else:
     utils.create_demo_file(mod, init_value=init_value)
 utils.adapt_gcc_opt("Makefile.pulprt", 3)
+profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
+                         gdb_script_name = "./gdb_demo.sh",
+                         csv_file = "profile.csv",
+                         interactive = False,
+                         measurement = "individual")
 utils.make(device)
 result_pulp = utils.gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
 print("TEST: obtaining Diana output")

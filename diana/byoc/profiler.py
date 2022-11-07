@@ -49,17 +49,9 @@ def generate_gdb_script(kernel_counters, logging_file="profile.txt",
     the global variables.
     """
     preamble = \
-        "!rm profile.txt\n" + \
-        "set print elements 0\n" + \
-        "set print repeats 0\n" + \
-        "set pagination off\n" + \
-        "file build/pulpissimo/demo/demo\n" + \
-        "target remote localhost:3333\n" + \
-        "load\n" + \
-        "break gdb_anchor\n" + \
         f"set logging file {logging_file}\n" + \
         "set logging on\n"
-    body = "c\n" + "n\n"
+    body = ""
     if measurement == "individual":
         for kernel_counter in kernel_counters:
             body += f"print {kernel_counter}\n"
@@ -270,7 +262,7 @@ def adapt_lib0(file_name):
 
 
 def insert_profiler(codegen_dir="./build/codegen/host/src/",
-                    gdb_script_name="./gdb_profiler.sh",
+                    gdb_script_name="./gdb_demo.sh",
                     gdb_log_name="./profile.txt",
                     csv_file="profile.csv",
                     interactive=False,
@@ -288,8 +280,9 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
     if measurement == "global":
         adapt_lib0(lib0_file_name)
     # Write test script which goes with this file
-    print(f"Generating GDB script ({gdb_script_name})")
-    with open(gdb_script_name, "w") as gdb_script:
+    print(f"Appending perf counters to GDB script ({gdb_script_name})")
+    # Append to the existing gdb script
+    with open(gdb_script_name, "a") as gdb_script:
         gdb_script.write(generate_gdb_script(kernel_counters, gdb_log_name,
                                              measurement=measurement))
     if interactive and measurement is not None:
