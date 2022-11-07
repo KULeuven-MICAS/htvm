@@ -1,6 +1,7 @@
 import re
 import glob
 import csv
+import pathlib
 
 
 def add_tvm_test_code_in_main(code_string: str):
@@ -267,13 +268,16 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
                     csv_file="profile.csv",
                     interactive=False,
                     measurement="individual"):
+    # Remove possible previous measurement
+    pathlib.Path(gdb_log_name).unlink()
     # Skip early in this case
     if measurement is None or measurement == "power":
         return
     lib1_file_name = codegen_dir + "default_lib1.c"
     lib0_file_name = codegen_dir + "default_lib0.c"
-    # Providing empty kernel_counters in case default_lib1.c is not updated
+    # Providing empty kernels, kernel_counters for global measurement
     kernel_counters = None
+    kernels = None
     # Update default_lib1.c
     if measurement == "individual":
         kernel_counters, kernels = adapt_lib1(lib1_file_name)
@@ -285,30 +289,33 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
     with open(gdb_script_name, "a") as gdb_script:
         gdb_script.write(generate_gdb_script(kernel_counters, gdb_log_name,
                                              measurement=measurement))
-    if interactive and measurement is not None:
-        print("Ready for parsing GDB output")
-        print("Please run to start profiling on Diana")
-        input("Press enter after profiling run...")
-        log_results = parse_gdb_log()
-        if measurement == "individual":
-            result = DianaResult(kernels, log_results)
-            print("\n-----  RESULTS ------")
-            result.pretty_print()
-            print("\n")
-            result.print_total_cycles()
-            print(f"\nExporting CSV results to \"{csv_file}\", exiting")
-            result.write_csv(csv_file)
-        else:
-            # global measurement
-            global_cycles = log_results[0]
-            print("\n-----  GLOBAL RESULT ------")
-            print(f"Total cycles  {global_cycles:12,} (100%)\n")
-            print(f"Exporting CSV results to \"{csv_file}\", exiting")
-            with open(csv_file, "w") as csv:
-                csv.write(f"{csv_file}_total,{global_cycles}\n")
+    return kernels
+
+
+def process_profiler(measurement, kernels, log_file="profile.txt", 
+                     csv_file="profile.csv"):
+    log_results = parse_gdb_log()
+    if measurement == "individual":
+        result = DianaResult(kernels, log_results)
+        print("\n-----  RESULTS ------")
+        result.pretty_print()
+        print("\n")
+        result.print_total_cycles()
+        print(f"\nExporting CSV results to \"{csv_file}\", exiting")
+        result.write_csv(csv_file)
     else:
-        # non interactive mode
-        print("Files are updated, gdb script is generated, exiting")
+        # global measurement
+        global_cycles = log_results[0]
+        clock_freq = 200e6
+        inference_time = float(global_cycles)/clock_freq
+        inference_freq = 1/inference_time
+        print("\n-----  GLOBAL RESULT ------")
+        print(f"Total cycles  {global_cycles:12,} (100%)\n")
+        print(f"@{clock_freq/1e6} MHz --> {inference_time*1000} ms / inference")
+        print(f"@{clock_freq/1e6} MHz --> {inference_freq} inferences / s\n")
+        print(f"Exporting CSV results to \"{csv_file}\", exiting")
+        with open(csv_file, "w") as csv:
+            csv.write(f"{csv_file}_total,{global_cycles}\n")
 
 
 if __name__ == "__main__":
