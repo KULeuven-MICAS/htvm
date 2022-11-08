@@ -561,6 +561,21 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
         print(output)
     return output
     
+def size_pulp(binary: str, verbose: bool = False) -> Dict[str,int]: 
+    riscv_size = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-size"
+    output = subprocess.check_output([riscv_size, binary],
+                                     stderr=subprocess.STDOUT,
+                                     universal_newlines=True) 
+    if verbose:
+        print(output)
+    out = [int(match.group()) for match in re.finditer("(\d+)", output,
+                                                       re.MULTILINE)]
+    return {"text": out[0],
+            "data": out[1],
+            "bss": out[2],
+            "total": out[3]}
+
+
 
 def get_gdb_output(gdb_log_path="debug/gdb.txt"):
     """

@@ -327,7 +327,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
     else: #measurement == "memory"
         peak_l2_memory_usage = log_results[0]
         current_l2_memory_usage = log_results[1]
-        print("\n----- MEMORY USAGE -----")
+        print("\n----- L2 DYNAMIC MEMORY USAGE -----")
         print(f"L2 Peak heap allocation : {peak_l2_memory_usage:12,} bytes")
         print(f"L2 heap allocation @gdb_anchor : {current_l2_memory_usage:,} bytes\n")
         print(f"Exporting CSV results to \"{csv_file}\", exiting")

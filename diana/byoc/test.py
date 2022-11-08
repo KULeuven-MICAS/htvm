@@ -61,7 +61,7 @@ kernels = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
                                    csv_file = "profile.csv",
                                    interactive = False,
                                    measurement = measurement)
-kernels = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
+_ = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
                                    gdb_script_name = "./gdb_demo.sh",
                                    csv_file = "memory.csv",
                                    gdb_log_name= "memory.txt",
@@ -89,3 +89,14 @@ perf_counters = profiler.process_profiler(measurement, kernels)
 perf_counters = profiler.process_profiler("memory", kernels=None,
                                           log_file="memory.txt",
                                           csv_file="memory.csv")
+size_dict = utils.size_pulp("build/pulpissimo/demo/demo")
+text = size_dict["text"]
+bss = size_dict["bss"]
+data = size_dict["data"]
+total = size_dict["total"]
+print("\n----- L2 STATIC MEMORY USAGE -----")
+print(f"L2 TEXT : {text:12,} bytes ({100 * text/total:3.1f}%)")
+print(f"L2 BSS  : {bss:12,} bytes ({100 * bss/total:3.1f}%)")
+print(f"L2 DATA : {data:12,} bytes ({100 * data/total:3.1f}%)")
+print(f"L2 TOTAL: {total:12,} bytes (100%)\n")
+print(f"L2 rel. total static memory usage : {100 * total/2**19:3.1f}%\n")
