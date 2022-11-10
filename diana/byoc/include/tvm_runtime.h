@@ -36,8 +36,12 @@ void __attribute__((noreturn)) TVMPlatformAbort(tvm_crt_error_t error_code) {
   exit(-1);
 }
 
-void* TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
+int TVMPlatformMemoryAllocate(size_t num_bytes, DLDevice dev, void** out_ptr) {
   *out_ptr = malloc_wrapper(num_bytes);
+  // Return nonzero exit code to caller on failure to allocate
+  if (*out_ptr == NULL){
+      return 1;
+  }
   return 0;
 }
 

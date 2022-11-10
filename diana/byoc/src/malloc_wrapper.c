@@ -36,6 +36,9 @@ void* malloc_wrapper(size_t size){
   // Allocate extra 4 bytes header in the first that stores the size
   size_t actual_size = size + 4;
   void* pointer = malloc_wrapped(actual_size);
+  if (pointer == NULL){
+      return NULL;
+  }
   // Write to this value as if it where a uint32_t
   ((uint32_t*)pointer)[0] = (uint32_t)size;
   // return the allocated section without the header
