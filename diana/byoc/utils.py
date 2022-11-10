@@ -354,9 +354,6 @@ int main(int argc, char** argv) {
     """ +\
     analog_boot_code +\
     """
-    tvm_workspace_t app_workspace;
-    static uint8_t g_aot_memory[TVMGEN_DEFAULT_WORKSPACE_SIZE];
-    StackMemoryManager_Init(&app_workspace, g_aot_memory, TVMGEN_DEFAULT_WORKSPACE_SIZE);\n
     // Sizes automatically added by utils.create_demo_file\n""" + \
     f"    uint32_t input_size = {np.prod(input_shape)};\n" + \
     f"    uint32_t output_size = {np.prod(output_shape)};\n" + \
