@@ -311,6 +311,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         result.print_total_cycles()
         print(f"\nExporting CSV results to \"{csv_file}\", exiting")
         result.write_csv(csv_file)
+        return result
     elif measurement == "global":
         # global measurement
         global_cycles = log_results[0]
@@ -324,6 +325,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         print(f"Exporting CSV results to \"{csv_file}\", exiting")
         with open(csv_file, "w") as csv:
             csv.write(f"{csv_file}_total,{global_cycles}\n")
+        return global_cycles
     else: #measurement == "memory"
         peak_l2_memory_usage = log_results[0]
         current_l2_memory_usage = log_results[1]
@@ -334,6 +336,8 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         with open(csv_file, "w") as csv:
             csv.write(f"{csv_file}_peak_memory,{peak_l2_memory_usage}\n")
             csv.write(f"{csv_file}_current_memory,{current_l2_memory_usage}\n")
+        return peak_l2_memory_usage
+        
 
 
 

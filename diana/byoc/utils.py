@@ -503,7 +503,7 @@ def gdb(device: str, binary: str = None, gdb_script: str = None,
             result = get_gdb_output("demo_x86.txt")
         except FileNotFoundError as e:
             print_error(log, out)
-            exit(1)
+            return None
         return result
     elif device == "pulp":
         log = pathlib.Path("demo.txt")
@@ -518,7 +518,7 @@ def gdb(device: str, binary: str = None, gdb_script: str = None,
             result = get_gdb_output(log)
         except FileNotFoundError as e:
             print_error(log, out)
-            exit(1)
+            return None
         return result
     else:
         raise ValueError(f"Device: '{device}' not supported")
@@ -542,18 +542,18 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     https://sourceware.org/bugzilla/show_bug.cgi?id=13000
     (Bug was fixed in 2018)
     """
-    timeout=30
-    try:
-        output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
+    timeout=40
+    #try:
+    output = subprocess.check_output([riscv_gdb, binary, "-x", gdb_script,
                                           "-batch"],
                                          stderr=subprocess.STDOUT,
                                          timeout=timeout,
                                          universal_newlines=True) 
-    except subprocess.TimeoutExpired as e:
-        print(f"GDB timed out after {timeout} seconds! --> Output:")
-        print("==================================================")
-        print(e.stdout.decode())
-        exit(1)
+    #except subprocess.TimeoutExpired as e:
+    #    print(f"GDB timed out after {timeout} seconds! --> Output:")
+    #    print("==================================================")
+    #    print(e.stdout.decode())
+    #    return None
     if verbose:
         print(output)
     return output
