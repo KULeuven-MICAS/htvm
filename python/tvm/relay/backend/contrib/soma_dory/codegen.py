@@ -94,8 +94,7 @@ def create_dory_conv_node(call, index: int):
     node.weight_type = 'int'
     node.weight_bits = int(weights.dtype[3:])   # extract the bit number from the dtype
     node.bias_bits = 32
-    node.MACs = node.output_dimensions[0] * node.output_dimensions[1] * node.output_channels \
-                * node.kernel_shape[1] * node.kernel_shape[0] * node.input_channels
+    node.add_memory_and_MACs()
 
     node.number_of_input_nodes = 1
     node.input_indexes = [str(index)]
@@ -162,8 +161,7 @@ def create_dory_dense_node(call, index: int):
     node.weight_type = 'int'
     node.weight_bits = int(weights.dtype[3:])   # extract the bit number from the dtype
     node.bias_bits = 128
-    node.MACs = node.output_dimensions[0] * node.output_dimensions[1] * node.output_channels \
-                * node.kernel_shape[1] * node.kernel_shape[0] * node.input_channels
+    node.add_memory_and_MACs()
 
     node.number_of_input_nodes = 1
     node.input_indexes = [str(index)]
@@ -308,6 +306,10 @@ def soma_dory_compiler(mod: tvm.ir.IRModule):
     func_name = mod.attrs.global_symbol
     hw_graph[0].name = func_name
     syms = [func_name]
+
+    # append MACs to MACs report, this is dirty
+    with open('/tmp/macs_report.txt', 'a') as f:
+        f.write(f"{func_name},{hw_graph[0].MACs},{hw_graph[0].weight_memory}\n")
 
     generator = C_Parser(hw_graph, config_file, '', 'None', 'No', 'auto', '')
     code_strings = generator.mapping_layers_to_C_files()
