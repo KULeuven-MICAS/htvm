@@ -111,9 +111,16 @@ class DianaResult():
     kernel_names = []
     results_string = []
 
-    def __init__(self, kernels, gdb_log):
+    def __init__(self, kernels, gdb_log, macs=None):
         self.kernel_names = kernels
         self.results_string = gdb_log
+        self.macs = self._init_macs(macs)
+
+    @staticmethod
+    def _init_macs(mac_file):
+        with open(mac_file) as csvfile:
+            reader = csv.DictReader(csvfile, fieldnames=["kernel","macs","wmem"])
+            return {row["kernel"]: (row["macs"], row["wmem"]) for row in reader}
 
     def __get_longest_name(self):
         """
@@ -133,7 +140,7 @@ class DianaResult():
         dory_total = 0
         results = iter(self.results_string)
         for name in self.kernel_names:
-            if self.is_dory_kernel(name):
+            if self._is_dory_kernel(name):
                 cycles = next(results)
                 dory_total += cycles
                 total += cycles
@@ -149,7 +156,7 @@ class DianaResult():
               f"{100 * dory_total/total:3.1f}%)")
 
     @staticmethod
-    def is_dory_kernel(kernel_name):
+    def _is_dory_kernel(kernel_name):
         regex_function = r"tvmgen_default_soma_dory_main_(\d*)"
         match_object = re.search(regex_function, kernel_name,
                                  flags=re.MULTILINE)
@@ -169,6 +176,10 @@ class DianaResult():
             cycles = next(results)
             print(separator)
             print(f"{i:<3}) {name: <{offset}}         : {int(cycles):,}")
+            if self._is_dory_kernel(name):
+                macs = self.macs[name][0]
+                wmem = self.macs[name][1]
+                print(f"     {f'MACs: {macs}, WMEM: {wmem}':<{offset}}         @ {float(macs)/cycles:,.3f} MACs/c")
 
     def write_csv(self, file_name="results.csv"):
         """
@@ -304,7 +315,9 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
                      csv_file="profile.csv"):
     log_results = parse_gdb_log(log_file)
     if measurement == "individual":
-        result = DianaResult(kernels, log_results)
+        result = DianaResult(kernels, log_results, "/tmp/macs_report.txt")
+        # Remove macs_report.txt after parsing to clear next measurement
+        pathlib.Path("/tmp/macs_report.txt").unlink()
         print("\n-----  RESULTS ------")
         result.pretty_print()
         print("\n")
