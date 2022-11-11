@@ -48,7 +48,6 @@ def run_network(name, mod, params, precision, pulp_target, measurement="global")
     else:
         utils.create_demo_file(mod, init_value=init_value)
     utils.adapt_gcc_opt("Makefile.pulprt", 3)
-    measurement = "global"
     kernels = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
                                        gdb_script_name = "./gdb_demo.sh",
                                        csv_file = "profile.csv",
@@ -142,8 +141,8 @@ if __name__ == "__main__":
 
     manual_layout_transform = True
     mod, params = create_model(precision, manual_layout_transform)
-    #result_dict =  run_network(f"fail_malloc_{precision}_bits", mod, params, precision, "soma_dory, c")
-    result_dict =  run_network(f"fail_malloc_{precision}_bits", mod, params, precision, "c")
+    result_dict =  run_network(f"fail_malloc_{precision}_bits", mod, params, precision, "soma_dory, c", "no_dma")
+    #result_dict =  run_network(f"fail_malloc_{precision}_bits", mod, params, precision, "c", "no_dma")
     print(f"run: {result_dict['name']}")
     print(f"\tcompld: {result_dict['compilation']}")
     print(f"\trunned: {result_dict['run']}")
