@@ -231,6 +231,96 @@ def create_dory_relu_node(prev_node):
 
     return node
 
+def create_dory_add_node(call, index_1: int, index_2: int, index_out: int):
+    add_call = get_root_call(call.op.body, "add")
+    right_shift_call = get_root_call(call.op.body, "right_shift")
+
+    # TODO: assert that weights and bias are constants
+    input_dims = call.args[0].type_annotation.shape
+    output_dims = right_shift_call.args[0].checked_type.shape
+    shift_value = right_shift_call.args[1].data
+
+
+    assert call.args[0].type_annotation.dtype[:3] == 'int', "Expected weights to be of type intX"
+
+    node = Layer_node()
+    node.name = 'Addition'
+    node.op_type = 'Add' # TODO might be redundant
+    node.pads = [0, 0, 0, 0]
+    node.group = 1
+    node.strides = [1, 1]
+    node.kernel_shape = [1,1]
+    node.input_dimensions = tvm_array_to_list(input_dims[-2:])
+    node.output_dimensions = tvm_array_to_list(input_dims[-2:])
+    node.input_channels = int(input_dims[-3])
+    node.output_channels = int(input_dims[-3])
+    node.output_activation_type = 'int'
+    node.output_activation_bits = 8
+    node.input_activation_type = 'int'
+    node.input_activation_bits = 8
+    node.constant_names = []
+    node.constant_names.append('inmul1')
+    node.inmul1 = {
+        'value': 1,
+        'layout': ''
+    }
+    node.constant_names.append('inadd1')
+    node.inadd1 = {
+        'value': 0,
+        'layout': ''
+    }
+    node.constant_names.append('inshift1')
+    node.inshift1 = {
+        'value': 0,
+        'layout': ''
+    }
+    node.constant_names.append('inmul2')
+    node.inmul2 = {
+        'value': 1,
+        'layout': ''
+    }
+    node.constant_names.append('inadd2')
+    node.inadd2 = {
+        'value': 0,
+        'layout': ''
+    }
+    node.constant_names.append('inshift2')
+    node.inshift2 = {
+        'value': 0,
+        'layout': ''
+    }
+    node.constant_names.append('outmul')
+    node.outmul = {
+        'value': 1,
+        'layout': ''
+    }
+    node.constant_names.append('outadd')
+    node.outadd = {
+        'value': 0,
+        'layout': ''
+    }
+    node.constant_names.append('outshift')
+    node.outshift = {
+        'value': 0,
+        'layout': ''
+    }
+    node.constant_type = 'int'
+    node.constants_memory = None
+    node.constant_bits = None
+    node.weight_type = 'int'
+    node.weight_bits = int(call.args[0].checked_type.dtype[3:])
+    node.bias_bits = 32
+    node.weight_memory = None
+    node.MACs = node.output_dimensions[0] * node.output_dimensions[1] * node.output_channels \
+                * node.kernel_shape[1] * node.kernel_shape[0] * node.input_channels
+    # Ids of previous nodes, node can have multiple input nodes
+    node.number_of_input_nodes = 1
+    node.input_indexes = [str(index_1), str(index_2)]  # '0' is the network input
+    node.output_index = str(index_out)
+    # Constants: weights
+    node.number_of_input_constants = 1
+    return node
+
 
 class RelayToDoryGraph(ExprVisitor):
     """Convert relay graph to dory graph
@@ -258,6 +348,13 @@ class RelayToDoryGraph(ExprVisitor):
             final_call = call.op.body
             if final_call.op.name == 'clip':
                 self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
+        elif pattern_name == 'soma_dory.add':
+            self.dory_graph.append(create_dory_add_node(call, 0, 1, 2))
+
+            final_call = call.op.body
+            if final_call.op.name == 'clip':
+                self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
+
         else:
             raise ValueError(f"Unknown composite function {pattern_name}")
 

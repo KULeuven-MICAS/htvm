@@ -48,6 +48,7 @@ def _biasadd_requant_clip_pattern(linear_op):
     return act_or_cast
 
 
+
 def conv2d_pattern():
     """Create pattern for conv2D with optional fused relu."""
 
@@ -71,8 +72,15 @@ def add_pattern():
     add = is_op("add")(
             wildcard(),wildcard()
     )
-    return add
-    return _biasadd_requant_clip_pattern(add)
+    cast_1 = is_op("cast")(add).has_attr({"dtype": "int32"})
+    right_shift = is_op("right_shift")(cast_1, is_constant())
+    clip = is_op("clip")(right_shift)
+    cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
+    # optionally have extra clip/ReLU
+    act_or_cast = cast.optional(lambda x: is_op("clip")(x))
+    return act_or_cast
+
+
 
 
 def _check_biasadd_requant_clip(pattern):
@@ -109,6 +117,33 @@ def _check_biasadd_requant_clip(pattern):
         return None
 
     return bias_add.args[0]
+
+def _check_requant_clip(pattern):
+    """Check if requant-clip pattern is supported by the soma dory accelerator
+    Returns None if not supported, returns the linear op before this sequence if supported
+    """
+    if str(pattern.op.name) == "clip":
+        clip = pattern
+        cast = clip.args[0]
+    else:
+        cast = pattern
+    right_shift = cast.args[0].args[0]
+
+    # Check range of shift factor
+    shift_factor = right_shift.args[1].data.numpy()
+    if shift_factor < 0 or shift_factor > 31:
+        logger.warning("shift factor of conv/dense operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported")
+        return None
+
+    right_shift_input = right_shift.args[0]
+
+    # For now, we don't support convolutions without bias
+    if str(right_shift_input.op.name) != "nn.bias_add":
+        logger.warning("Found conv/dense op without nn.bias_add. Acceleration for this op is not supported")
+        return None
+
+    return right_shift_input
+
 
 
 def check_conv2d(pattern):
@@ -165,6 +200,10 @@ def check_fully_connected(pattern):
 
 def check_add(pattern):
     """Check if the add layer is supported by the soma dory accelerator"""
+    # In case the same input is used twice
+    if len(pattern.args) == 1:
+        return True
+    # Otherwise A and B are different
     tensor_shape_a = list(pattern.args[0].checked_type.shape)
     tensor_shape_b = list(pattern.args[1].checked_type.shape)
     if tensor_shape_a != tensor_shape_b:
