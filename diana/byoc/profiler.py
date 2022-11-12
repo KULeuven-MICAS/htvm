@@ -380,7 +380,7 @@ def adapt_dory_libs(codegen_dir):
             re_decl = r"(#include \"dory.h\")"
             subst_decl = r'\1\n#include "pulp_rt_profiler_wrapper.h"\n\nextern '+ f"{counter};"
             replaced = re.sub(re_decl, subst_decl, data, count=1, flags=re.MULTILINE)
-            regex = r"(dory_cores_barrier_digital\(\);\n\s*(digital_fully_connected|digital_depthwise_conv_2d|digital_conv_2d)\(.*\);\n\s*dory_cores_barrier_digital\(\);)|(dory_cores_barrier_analog\(\);\n\s*(analog_fully_connected|analog_depthwise_conv_2d|analog_conv_2d)\(.*\);\n\s*dory_cores_barrier_analog\(\);)"
+            regex = r"(dory_cores_barrier_digital\(\);\n\s*(element_wise_sum|digital_fully_connected|digital_depthwise_conv_2d|digital_conv_2d)\(.*\);\n\s*dory_cores_barrier_digital\(\);)|(dory_cores_barrier_analog\(\);\n\s*(analog_fully_connected|analog_depthwise_conv_2d|analog_conv_2d)\(.*\);\n\s*dory_cores_barrier_analog\(\);)"
             subst = f"\\n    start_perf_counter();\\n\\n    \\1\\n\\n    {counter} += stop_perf_counter();"
             replaced = re.sub(regex, subst, replaced, count=1, flags=re.MULTILINE)
             dory_lib.seek(0)
