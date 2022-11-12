@@ -4,6 +4,7 @@ import utils
 import numpy as np
 import profiler
 import subprocess
+import pathlib
 
 import tvm.relay as relay
 #from relay_simple import create_model
@@ -36,18 +37,15 @@ def run_network(name, mod, params, precision, pulp_target, measurement="global")
     # run on Diana
     print("TEST: compiling for Diana")
     device = "pulp"
-    #if manual_layout_transform:
-    #    target = "soma_dory, c"
-    #else:
-    #    target = 'soma_dory -layout_transform=0, c'
     fusion = True
     utils.tvmc_compile_and_unpack(model, target=pulp_target, fuse_layers=fusion)
     # Add analog boot code in case of precision
     if precision == 2:
         utils.create_demo_file(mod, init_value=init_value, boot_analog=True)
+        utils.adapt_gcc_opt("Makefile.pulprt", 0)
     else:
         utils.create_demo_file(mod, init_value=init_value)
-    utils.adapt_gcc_opt("Makefile.pulprt", 3)
+        utils.adapt_gcc_opt("Makefile.pulprt", 3)
     kernels = profiler.insert_profiler(codegen_dir = "./build/codegen/host/src/",
                                        gdb_script_name = "./gdb_demo.sh",
                                        csv_file = "profile.csv",
@@ -71,18 +69,25 @@ def run_network(name, mod, params, precision, pulp_target, measurement="global")
                 "peak_l2_usage": None, 
                 "size_dict": None}
     size_dict = utils.size_pulp("build/pulpissimo/demo/demo")
-    try:
-        result_pulp = utils.gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return {"name": name,
-                "compilation": True,
-                "run": False, 
-                "verification": None, 
-                "cycles": None, 
-                "peak_l2_usage": None, 
-                "size_dict": size_dict}
-    print("TEST: obtaining Diana output")
-    print(result_pulp)
+    if precision == 2:
+        log = pathlib.Path("demo.txt")
+        # Remove previous log before proceeding
+        log.unlink(missing_ok=True)
+        input("Please continue the measurement manually... And press enter")
+        result_pulp = utils.get_gdb_output("demo.txt")
+    else:
+        try:
+            result_pulp = utils.gdb(device, "build/pulpissimo/demo/demo", "gdb_demo.sh")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return {"name": name,
+                    "compilation": True,
+                    "run": False, 
+                    "verification": None, 
+                    "cycles": None, 
+                    "peak_l2_usage": None, 
+                    "size_dict": size_dict}
+            print("TEST: obtaining Diana output")
+            print(result_pulp)
 
     if precision == 2:
         print("TEST: Verification for int2 is not supported on X86")
