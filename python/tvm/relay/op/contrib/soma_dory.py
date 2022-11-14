@@ -36,17 +36,22 @@ from tvm.relay.backend.contrib.soma_dory.transform import SomaDoryGraphQuantizer
 logger = logging.getLogger("SomaDory")
 
 
-def _biasadd_requant_clip_pattern(linear_op):
-    """Add pattern bias_add-requant-optional_clip to linear_op"""
+def _requant_clip_pattern(prev_op):
+    """Add pattern requant-optional_clip to prev_op"""
 
-    bias_add = is_op("nn.bias_add")(linear_op, wildcard())
-    right_shift = is_op("right_shift")(bias_add, is_constant())
+    right_shift = is_op("right_shift")(prev_op, is_constant())
     clip = is_op("clip")(right_shift)
     cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
     # optionally have extra clip/ReLU
     act_or_cast = cast.optional(lambda x: is_op("clip")(x))
     return act_or_cast
 
+
+def _biasadd_requant_clip_pattern(linear_op):
+    """Add pattern bias_add-requant-optional_clip to linear_op"""
+
+    bias_add = is_op("nn.bias_add")(linear_op, wildcard())
+    return _requant_clip_pattern(bias_add)
 
 
 def conv2d_pattern():
@@ -67,27 +72,19 @@ def fully_connected_pattern():
     return _biasadd_requant_clip_pattern(fc)
 
 
-def add_pattern():
-    """Create pattern for add with optional fused relu."""
-    add = is_op("add")(
-            wildcard(),wildcard()
-    )
-    cast_1 = is_op("cast")(add).has_attr({"dtype": "int32"})
-    right_shift = is_op("right_shift")(cast_1, is_constant())
-    clip = is_op("clip")(right_shift)
-    cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
-    # optionally have extra clip/ReLU
-    act_or_cast = cast.optional(lambda x: is_op("clip")(x))
-    return act_or_cast
+def element_wise_add_pattern():
+    """Create pattern for element-wise-add with optional fused relu."""
+
+    cast_a = is_op("cast")(wildcard()).has_attr({"dtype": "int32"})
+    cast_b = is_op("cast")(wildcard()).has_attr({"dtype": "int32"})
+    add = is_op("add")(cast_a, cast_b)
+    return _requant_clip_pattern(add)
 
 
-
-
-def _check_biasadd_requant_clip(pattern):
-    """Check if bias_add-requant-clip pattern is supported by the soma dory accelerator
-    Returns None if not supported, returns the linear op before this sequence if supported
+def _check_requant_clip(pattern):
+    """Check if requant-clip pattern is supported by the soma dory accelerator
+    Returns None if not supported, returns the op before this sequence if supported
     """
-
     if str(pattern.op.name) == "clip":
         clip = pattern
         cast = clip.args[0]
@@ -98,12 +95,24 @@ def _check_biasadd_requant_clip(pattern):
     # Check range of shift factor
     shift_factor = right_shift.args[1].data.numpy()
     if shift_factor < 0 or shift_factor > 31:
-        logger.warning("shift factor of conv/dense operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported")
+        logger.warning("shift factor of accelerator operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported")
         return None
 
     right_shift_input = right_shift.args[0]
 
-    # For now, we don't support convolutions without bias
+    return right_shift_input
+
+
+def _check_biasadd_requant_clip(pattern):
+    """Check if bias_add-requant-clip pattern is supported by the soma dory accelerator
+    Returns None if not supported, returns the linear op before this sequence if supported
+    """
+
+    right_shift_input = _check_requant_clip(pattern)
+    if right_shift_input is None:
+        return None
+
+    # For now, we don't support linears without bias
     if str(right_shift_input.op.name) != "nn.bias_add":
         logger.warning("Found conv/dense op without nn.bias_add. Acceleration for this op is not supported")
         return None
@@ -117,33 +126,6 @@ def _check_biasadd_requant_clip(pattern):
         return None
 
     return bias_add.args[0]
-
-def _check_requant_clip(pattern):
-    """Check if requant-clip pattern is supported by the soma dory accelerator
-    Returns None if not supported, returns the linear op before this sequence if supported
-    """
-    if str(pattern.op.name) == "clip":
-        clip = pattern
-        cast = clip.args[0]
-    else:
-        cast = pattern
-    right_shift = cast.args[0].args[0]
-
-    # Check range of shift factor
-    shift_factor = right_shift.args[1].data.numpy()
-    if shift_factor < 0 or shift_factor > 31:
-        logger.warning("shift factor of conv/dense operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported")
-        return None
-
-    right_shift_input = right_shift.args[0]
-
-    # For now, we don't support convolutions without bias
-    if str(right_shift_input.op.name) != "nn.bias_add":
-        logger.warning("Found conv/dense op without nn.bias_add. Acceleration for this op is not supported")
-        return None
-
-    return right_shift_input
-
 
 
 def check_conv2d(pattern):
@@ -198,25 +180,22 @@ def check_fully_connected(pattern):
     return True
 
 
-def check_add(pattern):
-    """Check if the add layer is supported by the soma dory accelerator"""
-    # In case the same input is used twice
-    if len(pattern.args) == 1:
-        return True
-    # Otherwise A and B are different
-    tensor_shape_a = list(pattern.args[0].checked_type.shape)
-    tensor_shape_b = list(pattern.args[1].checked_type.shape)
-    if tensor_shape_a != tensor_shape_b:
-        logger.warning(f"Tensor shapes for add don't match:\n"+\
-                " Tensor a: {tensor_shape_a}\n" + \
-                " Tensor b: {tensor_shape_b}\n" + \
-                "acceleration for this add is not supported")
+def check_element_wise_add(pattern):
+    """Check if the element-wise-add layer is supported by the soma dory accelerator"""
+
+    add = _check_requant_clip(pattern)
+    if add is None:
         return False
-# TODO Add support for this
-#    add = _check_biasadd_requant_clip(pattern)
-#    if add is None:
-#        return False
-#
+
+    tensor_shape_a = list(add.args[0].checked_type.shape)
+    tensor_shape_b = list(add.args[1].checked_type.shape)
+    if tensor_shape_a != tensor_shape_b:
+        logger.warning(f"Tensor shapes for element-wise-add don't match:"+\
+                " Tensor a: {tensor_shape_a}," + \
+                " Tensor b: {tensor_shape_b}." + \
+                " Acceleration for this element-wise-add is not supported")
+        return False
+
     return True
 
 
@@ -231,7 +210,7 @@ def pattern_table():
     return [
         ("soma_dory.conv2d", conv2d_pattern(), check_conv2d),
         ("soma_dory.dense", fully_connected_pattern(), check_fully_connected),
-        ("soma_dory.add", add_pattern(), check_add),
+        ("soma_dory.add", element_wise_add_pattern(), check_element_wise_add),
     ]
 
 
