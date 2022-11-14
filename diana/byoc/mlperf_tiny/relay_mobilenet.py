@@ -192,7 +192,8 @@ def create_model(weight_bits, add_layout_transforms):
         x = relay_soma_layout_transform(x, (1, num_filters_6))
 
     weights_shape = (num_classes, num_filters_6)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    # Hardcode to 8 bits, since dense not supported on analog accelerator
+    weights = create_random_array(weights_shape, 'int8')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
 

@@ -3,6 +3,7 @@ from utils import (
         relay_soma_layout_transform,
         relay_soma_conv2d,
         relay_soma_dense,
+        relay_soma_add,
         create_demo_file,
         parse_cli_options,
         create_random_array
@@ -43,8 +44,10 @@ def create_model(weight_bits, add_layout_transforms):
     bias = create_random_array(weights_shape[0], 'int32')
     y, params_conv3 = relay_soma_conv2d(y, 'conv3', weights, bias, padding=(1, 1), act=False, shift_bits=4)
 
-    x = relay.add(x, y)
-    x = relay.op.clip(x, a_min=0, a_max=127)
+    #x = relay.add(x, y)
+    #x = relay.op.clip(x, a_min=0, a_max=127)
+    x = relay_soma_add(x, y, "add_1", act=True)
+    
 
     # Second stack
     num_filters_2 = 32
@@ -63,8 +66,9 @@ def create_model(weight_bits, add_layout_transforms):
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv6 = relay_soma_conv2d(x, 'conv6', weights, bias, strides=(2, 2), act=False, shift_bits=4)
 
-    x = relay.add(x, y)
-    x = relay.op.clip(x, a_min=0, a_max=127)
+    #x = relay.add(x, y)
+    #x = relay.op.clip(x, a_min=0, a_max=127)
+    x = relay_soma_add(x, y, "add_2", act=True)
 
     # Third stack
     num_filters_3 = 64
@@ -83,8 +87,9 @@ def create_model(weight_bits, add_layout_transforms):
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv9 = relay_soma_conv2d(x, 'conv9', weights, bias, strides=(2, 2), act=False, shift_bits=4)
 
-    x = relay.add(x, y)
-    x = relay.op.clip(x, a_min=0, a_max=127)
+    #x = relay.add(x, y)
+    #x = relay.op.clip(x, a_min=0, a_max=127)
+    x = relay_soma_add(x, y, "add_3", act=True)
 
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters_3, 8, 8))
@@ -97,7 +102,8 @@ def create_model(weight_bits, add_layout_transforms):
         x = relay_soma_layout_transform(x, (1, num_filters_3))
 
     weights_shape = (num_classes, num_filters_3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    # Hardcode to int8 since dense is not supported on analog accelerator
+    weights = create_random_array(weights_shape, 'int8')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
 

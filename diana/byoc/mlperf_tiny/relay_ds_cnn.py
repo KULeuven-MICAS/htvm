@@ -19,19 +19,29 @@ import numpy as np
 
 
 def create_model(weight_bits, add_layout_transforms):
-    input_shape = (1, 1, 49, 10)
+    #input_shape = (1, 1, 49, 10)
+    # Use transpose for better performance
+    input_shape = (1, 1, 10, 49)
     num_classes = 12
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
     num_filters = 64
-    weights_shape = (num_filters, input_shape[1], 10, 4)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    #weights_shape = (num_filters, input_shape[1], 10, 4)
+    # Use transpose for better performance
+    weights_shape = (num_filters, input_shape[1], 4, 10)
+    # Hardcode to 8 bits integer here, since these filter strides are not supported by any accelerator
+    weights = create_random_array(weights_shape, 'int8')
     bias = create_random_array(weights_shape[0], 'int32')
-    x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(5, 1), act=True, shift_bits=4)
+    #x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(5, 1), act=True, shift_bits=4)
+    # Use transpose for better performance
+    x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(1, 5), act=True, shift_bits=4)
 
-    if add_layout_transforms:
-        x = relay_soma_layout_transform(x, (1, num_filters, 25, 5))
-
+    ## Not necessary anymore if performed on the accelerator
+    #if add_layout_transforms:
+    #    #x = relay_soma_layout_transform(x, (1, num_filters, 25, 5))
+    #    # Use transpose for better performance
+    #    x = relay_soma_layout_transform(x, (1, num_filters, 5, 25))
+    
     weights_shape = (num_filters, 1, 3, 3)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
@@ -73,17 +83,22 @@ def create_model(weight_bits, add_layout_transforms):
     x, params_conv9 = relay_soma_conv2d(x, 'conv9', weights, bias, act=True, shift_bits=4)
 
     if add_layout_transforms:
-        x = relay_soma_layout_transform(x, (1, num_filters, 25, 5))
+        #x = relay_soma_layout_transform(x, (1, num_filters, 25, 5))
+        # Use transpose for better performance
+        x = relay_soma_layout_transform(x, (1, num_filters, 5, 25))
 
     # avg pool
-    x = relay.nn.avg_pool2d(x, (25, 5))
+    #x = relay.nn.avg_pool2d(x, (25, 5))
+    # Use transpose for better performance
+    x = relay.nn.avg_pool2d(x, (5, 25))
     x = relay.reshape(x, (1, num_filters))
 
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters))
 
     weights_shape = (num_classes, num_filters)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    # Hardcode to 8 bits integers, since dense layers are not supported on analog accelerator
+    weights = create_random_array(weights_shape, 'int8')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
 
@@ -103,7 +118,7 @@ def create_model(weight_bits, add_layout_transforms):
     x = relay.cast(x, 'float32')    # cast needed since softmax in TVM seems not to work with integer inputs
     x = relay.op.nn.softmax(x)
 
-    ### combine all params in one dictionary
+    # combine all params in one dictionary
     params_conv1.update(params_conv2)
     params_conv1.update(params_conv3)
     params_conv1.update(params_conv4)
