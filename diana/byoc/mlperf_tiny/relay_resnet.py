@@ -24,8 +24,9 @@ def create_model(weight_bits, add_layout_transforms):
     num_classes = 12    # NOTE originally 10, but made 12 to support diana accelerator
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
 
-    if add_layout_transforms:
-        x = relay_soma_layout_transform(x, input_shape)
+    # Assume incoming data layout is already correct
+    #if add_layout_transforms:
+    #   x = relay_soma_layout_transform(x, input_shape)
 
     num_filters_1 = 16
     weights_shape = (num_filters_1, 3, 3, 3)
