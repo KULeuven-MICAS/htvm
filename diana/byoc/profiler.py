@@ -114,7 +114,10 @@ class DianaResult():
     def __init__(self, kernels, gdb_log, macs=None):
         self.kernel_names = kernels
         self.results_string = gdb_log
-        self.macs = self._init_macs(macs)
+        try:
+            self.macs = self._init_macs(macs)
+        except FileNotFoundError:
+            self.macs = None
 
     @staticmethod
     def _init_macs(mac_file):
@@ -435,7 +438,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
     if measurement == "individual" or measurement == "no_dma":
         result = DianaResult(kernels, log_results, "/tmp/macs_report.txt")
         # Remove macs_report.txt after parsing to clear next measurement
-        pathlib.Path("/tmp/macs_report.txt").unlink()
+        pathlib.Path("/tmp/macs_report.txt").unlink(missing_ok=True)
         print("\n-----  RESULTS ------")
         result.pretty_print()
         print("\n")
@@ -445,7 +448,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         return result
     elif measurement == "global":
         # Remove macs_report.txt after parsing to clear next measurement
-        pathlib.Path("/tmp/macs_report.txt").unlink()
+        pathlib.Path("/tmp/macs_report.txt").unlink(missing_ok=True)
         # global measurement
         global_cycles = log_results[0]
         clock_freq = 200e6
