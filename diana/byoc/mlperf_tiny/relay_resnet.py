@@ -95,11 +95,18 @@ def create_model(weight_bits, add_layout_transforms):
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters_3))
 
-    weights_shape = (num_classes, num_filters_3)
-    # Hardcode to int8 since dense is not supported on analog accelerator
-    weights = create_random_array(weights_shape, 'int8')
-    bias = create_random_array(weights_shape[0], 'int32')
-    x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
+    if weight_bits == 8:
+        weights_shape = (num_classes, num_filters_3)
+        weights = create_random_array(weights_shape, 'int8')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
+    elif weight_bits == 2:
+        x = relay.reshape(x, (1, num_filters_3, 1, 1))
+        weights_shape = (num_classes, num_filters_3, 1, 1)
+        weights = create_random_array(weights_shape, 'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense = relay_soma_conv2d(x, 'dense', weights, bias, padding=(0,0), act=False, shift_bits=4)
+
 
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_classes))
