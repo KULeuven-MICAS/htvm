@@ -29,8 +29,7 @@ def create_model(weight_bits, add_layout_transforms):
     #weights_shape = (num_filters, input_shape[1], 10, 4)
     # Use transpose for better performance
     weights_shape = (num_filters, input_shape[1], 4, 10)
-    # Hardcode to 8 bits integer here, since these filter strides are not supported by any accelerator
-    weights = create_random_array(weights_shape, 'int8')
+    weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     #x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(5, 1), act=True, shift_bits=4)
     # Use transpose for better performance
