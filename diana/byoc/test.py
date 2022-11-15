@@ -34,9 +34,9 @@ def run_network_x86(name, f_create_model):
     print(result_x86)
     return result_x86
 
-def run_network_diana(name, f_create_model, precision, pulp_target, measurement="global", result_x86=None):
+def run_network_diana(name, f_create_model, precision, mixed, pulp_target, measurement="global", result_x86=None):
     np.random.seed(0)
-    mod, params = f_create_model(precision, True)
+    mod, params = f_create_model(precision, True, mixed)
     model = TVMCModel(mod, params)
     init_value = 1
     verification = None
@@ -46,7 +46,7 @@ def run_network_diana(name, f_create_model, precision, pulp_target, measurement=
     fusion = True
     utils.tvmc_compile_and_unpack(model, target=pulp_target, fuse_layers=fusion)
     # Add analog boot code in case of precision
-    if precision == 2:
+    if precision == 2 or mixed:
         utils.create_demo_file(mod, init_value=init_value, boot_analog=True)
         utils.adapt_gcc_opt("Makefile.pulprt", 0)
     else:
@@ -74,7 +74,7 @@ def run_network_diana(name, f_create_model, precision, pulp_target, measurement=
                 "heap_usage": None, 
                 "size_dict": None}
     size_dict = utils.size_pulp("build/pulpissimo/demo/demo")
-    if precision == 2:
+    if precision == 2 or mixed:
         log = pathlib.Path("demo.txt")
         # Remove previous log before proceeding
         log.unlink(missing_ok=True)
@@ -94,7 +94,7 @@ def run_network_diana(name, f_create_model, precision, pulp_target, measurement=
             print("TEST: obtaining Diana output")
             print(result_pulp)
 
-    if precision == 2:
+    if precision == 2 or mixed:
         print("TEST: Verification for int2 is not supported on X86")
     else:
         print("Final Results")
@@ -164,19 +164,21 @@ if __name__ == "__main__":
     import mlperf_tiny.relay_mobilenet
     import mlperf_tiny.relay_resnet
 
-    network_under_test = mlperf_tiny.relay_resnet
-
-
-    ### for reproducability
-    experiment_name = pathlib.Path("test")
+    # Test settings
+    network_under_test = mlperf_tiny.relay_dae
+    precision = 2
+    mixed = True
+    measurement = "global"
+    name = "relay_dae"
+    setting = "HTVM_opt_mixed"
+    experiment_name = pathlib.Path(f"{name}_{measurement}_{precision}_bits_{setting}")
     folder = pathlib.Path("results")
     exp_folder = folder / experiment_name
+    test_target ="soma_dory -layout_transform=0, c"
+    #test_target ="c"
 
     network_file = pathlib.Path(network_under_test.__file__)
     network_create = network_under_test.create_model
-    ## Set precision to 2 for triggering analog core
-    precision = 8
-    measurement = "global"
     try:
         exp_folder.mkdir(parents=True)
     except FileExistsError as e:
@@ -189,8 +191,11 @@ if __name__ == "__main__":
         shutil.rmtree(exp_folder)
         exp_folder.mkdir(parents=True)
 
-    result_x86 = run_network_x86('manual_test_x86', network_create)
-    result_dict =  run_network_diana(f"ana_{precision}_bits", network_create, precision, "soma_dory -layout_transform=0, c", measurement, result_x86)
+    if precision == 8:
+        result_x86 = run_network_x86('manual_test_x86', network_create)
+    else:
+        result_x86 = None
+    result_dict =  run_network_diana(f"final_testing", network_create, precision, mixed, test_target, measurement, result_x86)
     print_results(result_dict) 
     print(f"Copying all results to {exp_folder}")
     shutil.copyfile(network_file, exp_folder/network_file.name)

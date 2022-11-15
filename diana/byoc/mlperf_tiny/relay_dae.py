@@ -18,7 +18,7 @@ from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
 
-def create_model(weight_bits, add_layout_transforms):
+def create_model(weight_bits, add_layout_transforms, mixed=False):
     input_shape = (1, 640)
     num_outputs = input_shape[1]
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
@@ -27,11 +27,35 @@ def create_model(weight_bits, add_layout_transforms):
         x = relay_soma_layout_transform(x, input_shape)
 
     num_units = 128
-    if weight_bits == 8:
+
+    if mixed:
+        weights_shape = (num_units, input_shape[1])
+        weights = create_random_array(weights_shape, f'int8')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense1 = relay_soma_dense(x, 'dense1', weights, bias, act=True, shift_bits=4)
+
+        x = relay.reshape(x, (1, 128, 1, 1))
+        weights_shape = (num_units, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense2 = relay_soma_conv2d(x, 'dense2', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        weights_shape = (num_units, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense3 = relay_soma_conv2d(x, 'dense3', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        weights_shape = (num_units, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense4 = relay_soma_conv2d(x, 'dense4', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+    elif weight_bits == 8:
         weights_shape = (num_units, input_shape[1])
         weights = create_random_array(weights_shape, f'int{weight_bits}')
         bias = create_random_array(weights_shape[0], 'int32')
         x, params_dense1 = relay_soma_dense(x, 'dense1', weights, bias, act=True, shift_bits=4)
+
 
         weights_shape = (num_units, num_units)
         weights = create_random_array(weights_shape, f'int{weight_bits}')
@@ -48,7 +72,7 @@ def create_model(weight_bits, add_layout_transforms):
         bias = create_random_array(weights_shape[0], 'int32')
         x, params_dense4 = relay_soma_dense(x, 'dense4', weights, bias, act=True, shift_bits=4)
  
-    if weight_bits == 2:
+    elif weight_bits == 2:
         # Workaround - implement dense as conv2d on analog acc
         x = relay.reshape(x, (input_shape[0],input_shape[1], 1, 1))
         weights_shape = (num_units, input_shape[1], 1, 1)
@@ -70,9 +94,45 @@ def create_model(weight_bits, add_layout_transforms):
         weights = create_random_array(weights_shape, f'int{weight_bits}')
         bias = create_random_array(weights_shape[0], 'int32')
         x, params_dense4 = relay_soma_conv2d(x, 'dense4', weights, bias, padding=(0,0), act=True, shift_bits=4)
+    else:
+        raise NotImplementedError
 
     num_units_neck = 8
-    if weight_bits == 8:
+
+    if mixed:
+        weights_shape = (num_units_neck, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense5 = relay_soma_conv2d(x, 'dense5', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        weights_shape = (num_units, num_units_neck, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense6 = relay_soma_conv2d(x, 'dense6', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        weights_shape = (num_units, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense7 = relay_soma_conv2d(x, 'dense7', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        weights_shape = (num_units, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense8 = relay_soma_conv2d(x, 'dense8', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        weights_shape = (num_units, num_units, 1, 1)
+        weights = create_random_array(weights_shape, f'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense9 = relay_soma_conv2d(x, 'dense9', weights, bias, padding=(0,0), act=True, shift_bits=4)
+
+        x = relay.reshape(x, (1,num_units))
+        weights_shape = (num_outputs, num_units)
+        weights = create_random_array(weights_shape, f'int8')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense10 = relay_soma_dense(x, 'dense10', weights, bias, act=False, shift_bits=4)
+
+
+    elif weight_bits == 8:
         weights_shape = (num_units_neck, num_units)
         weights = create_random_array(weights_shape, f'int{weight_bits}')
         bias = create_random_array(weights_shape[0], 'int32')
@@ -103,7 +163,7 @@ def create_model(weight_bits, add_layout_transforms):
         bias = create_random_array(weights_shape[0], 'int32')
         x, params_dense10 = relay_soma_dense(x, 'dense10', weights, bias, act=False, shift_bits=4)
 
-    if weight_bits == 2:
+    elif weight_bits == 2:
         weights_shape = (num_units_neck, num_units, 1, 1)
         weights = create_random_array(weights_shape, f'int{weight_bits}')
         bias = create_random_array(weights_shape[0], 'int32')
@@ -133,6 +193,8 @@ def create_model(weight_bits, add_layout_transforms):
         weights = create_random_array(weights_shape, f'int{weight_bits}')
         bias = create_random_array(weights_shape[0], 'int32')
         x, params_dense10 = relay_soma_conv2d(x, 'dense10', weights, bias, padding=(0,0), act=False, shift_bits=4)
+    else:
+        raise NotImplementedError
 
 
     if add_layout_transforms:
