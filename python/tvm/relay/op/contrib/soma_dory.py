@@ -151,9 +151,9 @@ def check_conv2d(pattern):
         return True
 
     # check conv2d attributes
-    if (not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_size', [[1, 1], [3, 3], [5, 5], [7, 7]])
-        or not is_conv2d_attr_value_supported(conv2d.attrs, 'padding', [4*[0], 4*[1], [1, 1, 0, 0], [0, 0, 1, 1]])
-        or not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
+    if (#not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_size', [[1, 1], [3, 3], [5, 5], [7, 7]])
+        #or not is_conv2d_attr_value_supported(conv2d.attrs, 'padding', [4*[0], 4*[1], [1, 1, 0, 0], [0, 0, 1, 1]])
+        not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'dilation', [[1, 1]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', [1, num_output_channels])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_layout', ['OIHW'])
