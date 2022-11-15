@@ -2,6 +2,7 @@ import re
 import glob
 import csv
 import pathlib
+import shutil
 
 
 def add_tvm_test_code_in_main(code_string: str):
@@ -115,6 +116,7 @@ class DianaResult():
         self.kernel_names = kernels
         self.results_string = gdb_log
         try:
+            shutil.copyfile("/tmp/macs_report.txt","macs.csv")
             self.macs = self._init_macs(macs)
         except FileNotFoundError:
             self.macs = None
@@ -472,7 +474,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         with open(csv_file, "w") as csv:
             csv.write(f"{csv_file}_peak_memory,{peak_l2_memory_usage}\n")
             csv.write(f"{csv_file}_current_memory,{current_l2_memory_usage}\n")
-        return peak_l2_memory_usage
+        return [peak_l2_memory_usage,current_l2_memory_usage]
         
 
 
