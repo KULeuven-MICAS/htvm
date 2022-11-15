@@ -19,7 +19,7 @@ from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
 
-def create_model(weight_bits, add_layout_transforms):
+def create_model(weight_bits, add_layout_transforms, mixed=False):
     input_shape = (1, 3, 32, 32)
     num_classes = 12    # NOTE originally 10, but made 12 to support diana accelerator
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
@@ -30,7 +30,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     num_filters_1 = 16
     weights_shape = (num_filters_1, 3, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, padding=(1, 1), act=True, shift_bits=4)
 
@@ -79,7 +82,10 @@ def create_model(weight_bits, add_layout_transforms):
     y, params_conv8 = relay_soma_conv2d(y, 'conv8', weights, bias, padding=(1, 1), act=False, shift_bits=4)
 
     weights_shape = (num_filters_3, num_filters_2, 1, 1)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv9 = relay_soma_conv2d(x, 'conv9', weights, bias, strides=(2, 2), act=False, shift_bits=4)
 
@@ -95,7 +101,7 @@ def create_model(weight_bits, add_layout_transforms):
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters_3))
 
-    if weight_bits == 8:
+    if weight_bits == 8 or mixed:
         weights_shape = (num_classes, num_filters_3)
         weights = create_random_array(weights_shape, 'int8')
         bias = create_random_array(weights_shape[0], 'int32')
