@@ -136,6 +136,10 @@ def check_conv2d(pattern):
         return False
 
     num_output_channels = conv2d.args[1].data.shape[0]
+    # Don't offload grouped analog convolutions
+    if conv2d.args[1].checked_type.dtype == "int2":
+        if conv2d.attrs['groups'] != 1:
+            return False
 
     def is_conv2d_attr_value_supported(attrs, name, supported_values):
         attr = attrs[name]
