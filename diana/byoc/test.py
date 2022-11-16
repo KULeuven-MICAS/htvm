@@ -174,7 +174,10 @@ if __name__ == "__main__":
     experiment_name = pathlib.Path(f"{name}_{measurement}_{precision}_bits_{setting}")
     folder = pathlib.Path("results")
     exp_folder = folder / experiment_name
-    test_target ="soma_dory -layout_transform=0, c"
+    if precision == 2:
+        test_target ="soma_dory -layout_transform=0 -disable_digital_acc=1, c"
+    else:
+        test_target ="soma_dory -layout_transform=0, c"
     #test_target ="c"
 
     network_file = pathlib.Path(network_under_test.__file__)
