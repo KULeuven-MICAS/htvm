@@ -18,7 +18,7 @@ from tvm.relay.backend import Executor, Runtime
 import numpy as np
 
 
-def create_model(weight_bits, add_layout_transforms):
+def create_model(weight_bits, add_layout_transforms, mixed):
     input_shape = (1, 3, 96, 96)
     num_classes = 4     # NOTE: originally 2, but made 4 to support diana accelerator
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
@@ -35,7 +35,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 2nd layer
     weights_shape = (num_filters_1, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv2 = relay_soma_conv2d(x, 'conv2', weights, bias, padding=(1, 1), groups=num_filters_1, act=True, shift_bits=4)
 
@@ -47,19 +50,26 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 3rd layer
     weights_shape = (num_filters_2, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv4 = relay_soma_conv2d(x, 'conv4', weights, bias, strides=(2, 2), padding=(1, 1), groups=num_filters_2, act=True, shift_bits=4)
 
     num_filters_3 = 2*num_filters_2
     weights_shape = (num_filters_3, num_filters_2, 1, 1)
     weights = create_random_array(weights_shape, f'int{weight_bits}')
+    weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv5 = relay_soma_conv2d(x, 'conv5', weights, bias, act=True, shift_bits=4)
 
     # 4rth layer
     weights_shape = (num_filters_3, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv6 = relay_soma_conv2d(x, 'conv6', weights, bias, padding=(1, 1), groups=num_filters_3, act=True, shift_bits=4)
 
@@ -70,7 +80,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 5th layer
     weights_shape = (num_filters_3, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv8 = relay_soma_conv2d(x, 'conv8', weights, bias, strides=(2, 2), padding=(1, 1), groups=num_filters_3, act=True, shift_bits=4)
 
@@ -82,7 +95,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 6th layer
     weights_shape = (num_filters_4, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv10 = relay_soma_conv2d(x, 'conv10', weights, bias, padding=(1, 1), groups=num_filters_4, act=True, shift_bits=4)
 
@@ -93,7 +109,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 7th layer
     weights_shape = (num_filters_4, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv12 = relay_soma_conv2d(x, 'conv12', weights, bias, strides=(2, 2), padding=(1, 1), groups=num_filters_4, act=True, shift_bits=4)
 
@@ -105,7 +124,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 8th layer
     weights_shape = (num_filters_5, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv14 = relay_soma_conv2d(x, 'conv14', weights, bias, padding=(1, 1), groups=num_filters_5, act=True, shift_bits=4)
 
@@ -116,7 +138,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 9th layer
     weights_shape = (num_filters_5, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv16 = relay_soma_conv2d(x, 'conv16', weights, bias, padding=(1, 1), groups=num_filters_5, act=True, shift_bits=4)
 
@@ -127,7 +152,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 10th layer
     weights_shape = (num_filters_5, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv18 = relay_soma_conv2d(x, 'conv18', weights, bias, padding=(1, 1), groups=num_filters_5, act=True, shift_bits=4)
 
@@ -138,7 +166,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 11th layer
     weights_shape = (num_filters_5, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv20 = relay_soma_conv2d(x, 'conv20', weights, bias, padding=(1, 1), groups=num_filters_5, act=True, shift_bits=4)
 
@@ -149,7 +180,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 12th layer
     weights_shape = (num_filters_5, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv22 = relay_soma_conv2d(x, 'conv22', weights, bias, padding=(1, 1), groups=num_filters_5, act=True, shift_bits=4)
 
@@ -160,7 +194,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 13th layer
     weights_shape = (num_filters_5, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv24 = relay_soma_conv2d(x, 'conv24', weights, bias, strides=(2, 2), padding=(1, 1), groups=num_filters_5, act=True, shift_bits=4)
 
@@ -172,7 +209,10 @@ def create_model(weight_bits, add_layout_transforms):
 
     # 14th layer
     weights_shape = (num_filters_6, 1, 3, 3)
-    weights = create_random_array(weights_shape, f'int{weight_bits}')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv26 = relay_soma_conv2d(x, 'conv26', weights, bias, padding=(1, 1), groups=num_filters_6, act=True, shift_bits=4)
 
@@ -191,12 +231,18 @@ def create_model(weight_bits, add_layout_transforms):
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters_6))
 
-    weights_shape = (num_classes, num_filters_6)
-    # Hardcode to 8 bits, since dense not supported on analog accelerator
-    weights = create_random_array(weights_shape, 'int8')
-    bias = create_random_array(weights_shape[0], 'int32')
-    x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
-
+    if weight_bits == 8 or mixed:
+        weights_shape = (num_classes, num_filters_6)
+        weights = create_random_array(weights_shape, 'int8')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
+    elif weight_bits == 2:
+        x = relay.reshape(x, (1, num_filters_6, 1, 1))
+        weights_shape = (num_classes, num_filters_6, 1, 1)
+        weights = create_random_array(weights_shape, 'int2')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense = relay_soma_conv2d(x, 'dense', weights, bias, act=False, shift_bits=4)
+        x = relay.reshape(x, (1, num_classes))
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_classes))
 
