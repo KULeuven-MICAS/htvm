@@ -48,7 +48,7 @@ def run_network_diana(name, f_create_model, precision, mixed, pulp_target, measu
     # Add analog boot code in case of precision
     if precision == 2 or mixed:
         utils.create_demo_file(mod, init_value=init_value, boot_analog=True)
-        utils.adapt_gcc_opt("Makefile.pulprt", 0)
+        utils.adapt_gcc_opt("Makefile.pulprt", 3)
     else:
         utils.create_demo_file(mod, init_value=init_value)
         utils.adapt_gcc_opt("Makefile.pulprt", 3)
