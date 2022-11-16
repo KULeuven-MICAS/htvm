@@ -29,7 +29,10 @@ def create_model(weight_bits, add_layout_transforms, mixed):
     #weights_shape = (num_filters, input_shape[1], 10, 4)
     # Use transpose for better performance
     weights_shape = (num_filters, input_shape[1], 4, 10)
-    weights = create_random_array(weights_shape, f'int8')
+    if mixed:
+        weights = create_random_array(weights_shape, f'int8')
+    else:
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
     bias = create_random_array(weights_shape[0], 'int32')
     #x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(5, 1), act=True, shift_bits=4)
     # Use transpose for better performance
@@ -95,12 +98,17 @@ def create_model(weight_bits, add_layout_transforms, mixed):
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters))
 
-    weights_shape = (num_classes, num_filters)
-    # Hardcode to 8 bits integers, since dense layers are not supported on analog accelerator
-    weights = create_random_array(weights_shape, 'int8')
-    bias = create_random_array(weights_shape[0], 'int32')
-    x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
-
+    if weight_bits == 8 or mixed:
+        weights_shape = (num_classes, num_filters)
+        weights = create_random_array(weights_shape, 'int8')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense = relay_soma_dense(x, 'dense', weights, bias, act=False, shift_bits=4)
+    if weight_bits == 2:
+        x = relay.reshape(x, (1, num_filters, 1, 1))
+        weights_shape = (num_classes, num_filters, 1, 1)
+        weights = create_random_array(weights_shape, f'int{weight_bits}')
+        bias = create_random_array(weights_shape[0], 'int32')
+        x, params_dense = relay_soma_conv2d(x, 'dense', weights, bias, padding=(0,0), act=False, shift_bits=4)
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_classes))
 
