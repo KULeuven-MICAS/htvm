@@ -622,8 +622,7 @@ def parse_cli_options() -> Tuple[argparse.Namespace, str]:
     parser = argparse.ArgumentParser(description="Utility argparser\
                                                   for example scripts")
     parser.add_argument('--target', dest='target',
-                        choices=("soma_dory, c", "c"),
-                        help="Target string to pass onto TVMC, '-device=arm_cpu' is added to the string later",
+                        help="Target string to pass onto TVMC, note that '-device=arm_cpu' is appended to the string later",
                         default="soma_dory, c")
     parser.add_argument('--device', dest='device',
                         choices = ("pulp", "x86"),
@@ -641,9 +640,6 @@ def parse_cli_options() -> Tuple[argparse.Namespace, str]:
                         help="Set TVM's Relay Fusion pass maximum fusion depth to 0",
                         action='store_const', const=False,
                         default=True)
-    parser.add_argument('--manual-layout-transform',
-                        help="Insert hand-tuned layout transform locations rather than automatically",
-                        action='store_true')
     parser.add_argument('--weight-bits', dest='weight_bits', type=int,
                         help="Number of bits per weight. This affects the selection of the digital/analog core",
                         choices=(8, 2),

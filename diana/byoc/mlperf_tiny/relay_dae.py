@@ -225,8 +225,7 @@ if __name__ == "__main__":
     args, opt_string = parse_cli_options()
 
     add_layout_transforms = False
-    if args.manual_layout_transform and 'soma_dory' in args.target:
-        args.target = args.target.replace('soma_dory', 'soma_dory -layout_transform=0')
+    if '-layout_transform=0' in args.target:
         add_layout_transforms = True
 
     # create the model

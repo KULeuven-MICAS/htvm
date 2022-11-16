@@ -20,6 +20,7 @@ Operations to support the SOMA accelerator.
 
 import tvm
 import logging
+from functools import partial
 
 from tvm.relay import transform
 from tvm.relay.build_module import bind_params_by_name
@@ -128,7 +129,7 @@ def _check_biasadd_requant_clip(pattern):
     return bias_add.args[0]
 
 
-def check_conv2d(pattern):
+def check_conv2d(pattern, supported_weight_bits=[8, 2]):
     """Check if the Conv2D is supported by the soma dory accelerator"""
 
     conv2d = _check_biasadd_requant_clip(pattern)
@@ -149,7 +150,7 @@ def check_conv2d(pattern):
 
         if attr not in supported_values:
             logger.warning(f"Expected nn.conv2d {name} to be one of {supported_values}, but got {attr}. \
-                            Acceleration for this conv2d is not supported")
+                            Acceleration for this op is not supported")
             return False
 
         return True
@@ -166,7 +167,18 @@ def check_conv2d(pattern):
         return False
 
     #conv2d_input = conv2d.args[0]
-    #conv2d_weight = conv2d.args[1]
+    conv2d_weight = conv2d.args[1]
+
+    weights_dtype = conv2d_weight.data.dtype
+    if not weights_dtype.startswith('int'):
+        logger.warning(f"Expected Conv2D weights to be of integer type, got {weights_dtype}. \
+                        Acceleration for this conv2d is not supported")
+        return False
+
+    if int(weights_dtype[3:]) not in supported_weight_bits:
+        logger.warning(f"Expected Conv2D weight bit-depth to be in {supported_weight_bits}. \
+                        Acceleration for this op is not supported")
+        return False
 
     return True
 
@@ -203,7 +215,7 @@ def check_element_wise_add(pattern):
     return True
 
 
-def pattern_table():
+def pattern_table(supported_weight_bits_conv2d):
     """
     Registers the patterns we want to match.
     Returns
@@ -212,7 +224,7 @@ def pattern_table():
     """
 
     return [
-        ("soma_dory.conv2d", conv2d_pattern(), check_conv2d),
+        ("soma_dory.conv2d", conv2d_pattern(), partial(check_conv2d, supported_weight_bits=supported_weight_bits_conv2d)),
         ("soma_dory.dense", fully_connected_pattern(), check_fully_connected),
         ("soma_dory.add", element_wise_add_pattern(), check_element_wise_add),
     ]
@@ -233,10 +245,14 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
     if params:
         mod["main"] = bind_params_by_name(mod["main"], params)
 
+    supported_weight_bits_conv2d = [8, 2]
+    if 'disable_digital_acc' in opts and opts['disable_digital_acc'] == '1':
+        supported_weight_bits_conv2d = [2]
+
     pipeline = [
             SomaDoryGraphQuantizer('int8'),
             transform.InferType(),
-            transform.MergeComposite(pattern_table()),
+            transform.MergeComposite(pattern_table(supported_weight_bits_conv2d)),
             transform.AnnotateTarget(["soma_dory"]),
             transform.InferType(),
             transform.PartitionGraph(),
