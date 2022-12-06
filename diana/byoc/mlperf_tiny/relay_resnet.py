@@ -127,8 +127,8 @@ def create_model(weight_bits, add_layout_transforms, mixed=False):
     #x = relay.op.nn.bias_add(x, b)
     #params_dense = {"dense.weights": weights, "dense.bias": bias}
 
-    x = relay.cast(x, 'float32')    # cast needed since softmax in TVM seems not to work with integer inputs
-    x = relay.op.nn.softmax(x)
+    #x = relay.cast(x, 'float32')    # cast needed since softmax in TVM seems not to work with integer inputs
+    #x = relay.op.nn.softmax(x)
 
     ## combine all params in one dictionary
     params_conv1.update(params_conv2)

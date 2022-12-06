@@ -159,22 +159,22 @@ def print_results(result_dict):
 
 if __name__ == "__main__":
     import mlperf_tiny
-    import mlperf_tiny.relay_dae
     import mlperf_tiny.relay_ds_cnn
     import mlperf_tiny.relay_mobilenet
     import mlperf_tiny.relay_resnet
+    import mlperf_tiny.relay_dae
 
     # Test settings
-    network_under_test = mlperf_tiny.relay_dae
+    network_under_test = mlperf_tiny.relay_resnet
     precision = 2
-    mixed = True
+    mixed = False
     measurement = "global"
-    name = "relay_dae"
-    setting = "HTVM_opt_mixed"
+    name = "relay_resnet_no_ews"
+    setting = "HTVM_opt_no_dma"
     experiment_name = pathlib.Path(f"{name}_{measurement}_{precision}_bits_{setting}")
     folder = pathlib.Path("results")
     exp_folder = folder / experiment_name
-    if precision == 2:
+    if precision == 2 and not mixed:
         test_target ="soma_dory -layout_transform=0 -disable_digital_acc=1, c"
     else:
         test_target ="soma_dory -layout_transform=0, c"
@@ -195,7 +195,8 @@ if __name__ == "__main__":
         exp_folder.mkdir(parents=True)
 
     if precision == 8:
-        result_x86 = run_network_x86('manual_test_x86', network_create)
+        #result_x86 = run_network_x86('manual_test_x86', network_create)
+        result_x86 = None
     else:
         result_x86 = None
     result_dict =  run_network_diana(f"final_testing", network_create, precision, mixed, test_target, measurement, result_x86)

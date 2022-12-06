@@ -196,8 +196,10 @@ def check_fully_connected(pattern):
     return True
 
 
-def check_element_wise_add(pattern):
+def check_element_wise_add(pattern, supported_weight_bits=[8]):
     """Check if the element-wise-add layer is supported by the soma dory accelerator"""
+    if 8 not in supported_weight_bits:
+        return False
 
     add = _check_requant_clip(pattern)
     if add is None:
@@ -226,7 +228,7 @@ def pattern_table(supported_weight_bits_conv2d):
     return [
         ("soma_dory.conv2d", conv2d_pattern(), partial(check_conv2d, supported_weight_bits=supported_weight_bits_conv2d)),
         ("soma_dory.dense", fully_connected_pattern(), check_fully_connected),
-        ("soma_dory.add", element_wise_add_pattern(), check_element_wise_add),
+        ("soma_dory.add", element_wise_add_pattern(), partial(check_element_wise_add, supported_weight_bits=supported_weight_bits_conv2d)),
     ]
 
 
