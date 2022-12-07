@@ -1,4 +1,3 @@
-import relay_resnet20
 from tvm.driver.tvmc.model import TVMCModel
 import utils
 import numpy as np
@@ -8,14 +7,12 @@ import pathlib
 import shutil
 
 import tvm.relay as relay
+import pytest
 
 
    
 
-def run_network_x86(name, f_create_model):
-    np.random.seed(0)
-    precision = 8
-    mod, params = f_create_model(precision, True)
+def run_network_x86(mod, params):
     model = TVMCModel(mod, params)
     init_value = 1
 
@@ -155,6 +152,35 @@ def print_results(result_dict):
         print(f"\t\tTEXT: {result_dict['size_dict']['text']:,} bytes")
         print(f"\t\tDATA: {result_dict['size_dict']['data']:,} bytes")
         print(f"\t\tBSS : {result_dict['size_dict']['bss']:,} bytes")
+
+import single_layer.relay_conv2d 
+import single_layer.relay_dense
+import single_layer.relay_dw_conv2d
+import single_layer.relay_add
+
+single_layers = {
+    "conv2d": single_layer.relay_conv2d.create_model,
+    "dense": single_layer.relay_dense.create_model,
+    "dw_conv2d": single_layer.relay_dw_conv2d.create_model,
+    "add": single_layer.relay_add.create_model
+}
+
+# Note that "run" is provided by the pytest argparser
+@pytest.mark.parametrize("model", list(single_layers.values()),
+                         ids=single_layers.keys())
+def test_single_layers(model, run):
+    np.random.seed(0)
+    mod, params = model(8)
+    model = TVMCModel(mod, params)
+    utils.tvmc_compile_and_unpack(model, target="soma_dory, c",
+                                  fuse_layers = True)
+    utils.create_demo_file(mod, indefinite=False)
+    utils.make("pulp")
+    if run:
+        output_pulp = utils.gdb("pulp")
+        output_x86 = run_network_x86(mod, params)
+        assert np.ma.allclose(output_x86,output_pulp)
+
 
 
 if __name__ == "__main__":

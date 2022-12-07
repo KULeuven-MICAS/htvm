@@ -514,11 +514,11 @@ def gdb(device: str, binary: str = None, gdb_script: str = None,
         print(f"GDB: Running '{gdb_script}' on '{device}'...")
         out = gdb_pulp(gdb_script, binary, verbose)
         print("GDB: Run on PULP finished")
-        try:
-            result = get_gdb_output(log)
-        except FileNotFoundError as e:
-            print_error(log, out)
-            return None
+        #try:
+        result = get_gdb_output(log)
+        #except FileNotFoundError as e:
+        #    print_error(log, out)
+        #    return None
         return result
     else:
         raise ValueError(f"Device: '{device}' not supported")
