@@ -4,21 +4,36 @@ import tvm
 import tvm.relay as relay
 from tvm.driver.tvmc.model import TVMCModel
 import numpy as np
+from typing import Tuple, Optional
+from numpy import typing as npt
 
-def create_model(weight_bits):
-    random = True
-    input_shape = (1, 32, 32, 32)
-    weights_shape = (32, 1, 3, 3)
+def create_model(weight_bits: int, 
+                 act: bool = True,
+                 input_shape: Tuple[int, ...] = (1, 32, 32, 32),
+                 weights_shape: Tuple[int, ...] = (32, 1, 3, 3),
+                 weights_values: Optional[tvm.nd.array] = None,
+                 bias_values: Optional[tvm.nd.array] = None,
+                 padding: Tuple[int, int] = (1, 1),
+                 strides: Tuple[int, int] = (1, 1),
+                 shift_bits: int = 4):
+    """
+    Generate a small relay graph that performs a DIANA-accelerator-
+    eligible depth-wise convolution pattern with various parameters
+    """
     out_channels = weights_shape[0]
     x = relay.var("input", relay.TensorType(input_shape, 'int8'))
-    if random:
+    if weights_values is None:
         weights = utils.create_random_array(weights_shape, f'int{weight_bits}')
+    else:
+        weights = weights_values
+    if bias_values is None:
         bias = utils.create_random_array(weights_shape[0], 'int32')
     else:
-        weights = utils.numpy_to_array(np.ones(weights_shape,dtype="int8"), f'int{weight_bits}')
-        bias = utils.numpy_to_array(np.zeros(weights_shape[0], dtype="int32"), 'int32')
+        bias = bias_values
     x, params1 = utils.relay_soma_conv2d(x, 'conv1', weights, bias, 
-                                         padding=(1, 1), act=False, 
+                                         act=act, 
+                                         padding=padding,
+                                         strides=strides,
                                          groups=out_channels,
                                          shift_bits=4)
     params = params1

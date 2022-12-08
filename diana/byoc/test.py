@@ -195,6 +195,27 @@ def test_conv2d(run, weight_bits, act, padding, strides):
 
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
+@pytest.mark.parametrize("padding", [(0, 0), (1, 1), (2, 2)], 
+                         ids = ["p(0,0)","p(1,1)","p(2,2)"])
+@pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
+                         ids = ["s(1,1)","s(2,2)"])
+def test_dw_conv2d(run, weight_bits, act, padding, strides):
+    import single_layer.relay_dw_conv2d 
+    # Set random seed for reproducible testing
+    np.random.seed(0)
+    ir_module, params = single_layer.relay_dw_conv2d.create_model(
+        weight_bits = weight_bits,
+        act = act,
+        padding = padding,
+        strides = strides,
+        shift_bits = 4
+            )
+    # Run the test
+    driver(ir_module, params, run)
+
+
+@pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
+@pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
 def test_dense(run, weight_bits, act):
     import single_layer.relay_dense
     # Set random seed for reproducible testing
@@ -211,7 +232,7 @@ def driver(mod: tvm.ir.IRModule,
            params: Dict[str, tvm.nd.array],
            run: bool = False):
     """
-    Compile and a model for the DIANA
+    Compile (and run) a model for DIANA for testing purposes
 
     If the run argument is used, then it will also run the compiled model
     on a remote GDB instance over port 3333.
