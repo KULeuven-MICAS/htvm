@@ -187,14 +187,29 @@ def test_conv2d(run, weight_bits, act, padding, strides):
         weight_bits = weight_bits,
         act = act,
         padding = padding,
+        strides = strides,
         shift_bits = 4
             )
     # Run the test
-    driver_digital(ir_module, params, run)
+    driver(ir_module, params, run)
 
-def driver_digital(mod: tvm.ir.IRModule, 
-                   params: Dict[str, tvm.nd.array],
-                   run: bool = False):
+@pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
+@pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
+def test_dense(run, weight_bits, act):
+    import single_layer.relay_dense
+    # Set random seed for reproducible testing
+    np.random.seed(0)
+    ir_module, params = single_layer.relay_dense.create_model(
+        weight_bits = weight_bits,
+        act = act,
+        shift_bits = 4
+            )
+    # Run the test
+    driver(ir_module, params, run)
+
+def driver(mod: tvm.ir.IRModule, 
+           params: Dict[str, tvm.nd.array],
+           run: bool = False):
     """
     Compile and a model for the DIANA
 
