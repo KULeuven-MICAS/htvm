@@ -12,5 +12,8 @@ def pytest_addoption(parser):
 
 def pytest_generate_tests(metafunc):
     if "run" in metafunc.fixturenames:
-        metafunc.parametrize("run", metafunc.config.getoption("run"))
+        ids = "run" if metafunc.config.getoption("run")[0] else "no_run"
+        metafunc.parametrize("run", 
+                             metafunc.config.getoption("run"),
+                             ids=[ids])
 

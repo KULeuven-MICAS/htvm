@@ -1,10 +1,13 @@
 from tvm.driver.tvmc.model import TVMCModel
+from typing import Dict
+import tvm
 import utils
 import numpy as np
 import profiler
 import subprocess
 import pathlib
 import shutil
+
 
 import tvm.relay as relay
 import pytest
@@ -28,7 +31,6 @@ def run_network_x86(mod, params):
     utils.make(device)
     print("TEST: obtaining X86 output")
     result_x86 = utils.gdb(device, "build/demo", "gdb_demo_x86.sh")
-    print(result_x86)
     return result_x86
 
 def run_network_diana(name, f_create_model, precision, mixed, pulp_target, measurement="global", result_x86=None):
@@ -153,33 +155,71 @@ def print_results(result_dict):
         print(f"\t\tDATA: {result_dict['size_dict']['data']:,} bytes")
         print(f"\t\tBSS : {result_dict['size_dict']['bss']:,} bytes")
 
-import single_layer.relay_conv2d 
-import single_layer.relay_dense
-import single_layer.relay_dw_conv2d
-import single_layer.relay_add
+#import single_layer.relay_conv2d
+#import single_layer.relay_dense
+#import single_layer.relay_dw_conv2d
+#import single_layer.relay_add
 
-single_layers = {
-    "conv2d": single_layer.relay_conv2d.create_model,
-    "dense": single_layer.relay_dense.create_model,
-    "dw_conv2d": single_layer.relay_dw_conv2d.create_model,
-    "add": single_layer.relay_add.create_model
-}
+#single_layers = {
+#    "conv2d": single_layer.relay_conv2d.create_model,
+    #"dense": single_layer.relay_dense.create_model,
+    #"dw_conv2d": single_layer.relay_dw_conv2d.create_model,
+    #"add": single_layer.relay_add.create_model
+#}
+
+#@pytest.mark.parametrize("model", list(single_layers.values()),
+#                         ids=single_layers.keys())
+
+
 
 # Note that "run" is provided by the pytest argparser
-@pytest.mark.parametrize("model", list(single_layers.values()),
-                         ids=single_layers.keys())
-def test_single_layers(model, run):
+@pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
+@pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
+@pytest.mark.parametrize("padding", [(0, 0), (1, 1), (2, 2)], 
+                         ids = ["p(0,0)","p(1,1)","p(2,2)"])
+@pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
+                         ids = ["s(1,1)","s(2,2)"])
+def test_conv2d(run, weight_bits, act, padding, strides):
+    import single_layer.relay_conv2d 
+    # Set random seed for reproducible testing
     np.random.seed(0)
-    mod, params = model(8)
+    ir_module, params = single_layer.relay_conv2d.create_model(
+        weight_bits = weight_bits,
+        act = act,
+        padding = padding,
+        shift_bits = 4
+            )
+    # Run the test
+    driver_digital(ir_module, params, run)
+
+def driver_digital(mod: tvm.ir.IRModule, 
+                   params: Dict[str, tvm.nd.array],
+                   run: bool = False):
+    """
+    Compile and a model for the DIANA
+
+    If the run argument is used, then it will also run the compiled model
+    on a remote GDB instance over port 3333.
+    Afterwards an x86 compiled model is used to compare outputs
+    """
+    # Create a TVMCModel
     model = TVMCModel(mod, params)
+    # Create the model library format file and unpack
     utils.tvmc_compile_and_unpack(model, target="soma_dory, c",
                                   fuse_layers = True)
+    # Create a demo file based on the model's inputs and outputs
     utils.create_demo_file(mod, indefinite=False)
+    # Make for DIANA
     utils.make("pulp")
     if run:
+        # Run the binary on DIANA
         output_pulp = utils.gdb("pulp")
+        # Compile and run the network on x86
         output_x86 = run_network_x86(mod, params)
+        # Compare X86 and DIANA outputs
+        # Use allclose, not allequal (in case of floats)
         assert np.ma.allclose(output_x86,output_pulp)
+
 
 
 
