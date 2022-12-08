@@ -4,8 +4,7 @@ This folder contains two Dockerfiles:
 * `Dockerfile.tvm`: Dockerfile that installs all dependencies for compiling and running `tvm-fork`.
 **Note:** this container image does *NOT* include the `tvm-fork` repository itself.
 * `Dockerfile.tutorial`: Dockerfile that installs extra dependencies on top of `Dockerfile.tvm` for running the tutorials in `/tvm-fork/diana/tutorial/`.
-It installs for example Diana's version of the `pulp-sdk` and an installation of the `pulp-riscv-gnu-toolchain`.
-Furthermore it installs `jupyterlab` for running jupyter notebooks in the web browser.
+It installs `jupyterlab` for running jupyter notebooks in the web browser.
 **Note:** this container image does *NOT* include the `tvm-fork` repository itself
 
 It should be possible to use both of these images with `docker` and `podman`.
@@ -37,14 +36,9 @@ To exit the container, just type `exit` inside of the terminal.
 
 ## 2. `Dockerfile.tutorial`
 
-To build this image you need access to [the `pulp-sdk-diana` repository](https://github.com/dianaKUL/pulp-sdk-diana)
-and an image of `tvm-fork` (built with `Dockerfile.tvm`).
-In the root directory of this repository (`tvm-fork`) clone the repository:
-```sh
-$ git clone git@github.com:dianaKUL/pulp-sdk-diana.git
+To build this you need an image of `tvm-fork` (built with `Dockerfile.tvm`).
 ```
-**Note** please don't share images that contain the pulp-sdk-diana repository to people who should not be allowed access.
-
+Then you can build with:
 ```
 $ podman build . -f diana/docker/Dockerfile.tutorial -t tvm-fork-tuto
 

@@ -3,7 +3,22 @@ FROM ubuntu:20.04
 # Setting values for tzdata
 ENV DEBIAN_FRONTEND=noninteractive
 # Setting up dependencies for tvm
-RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y git python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev python3-pip llvm gcc-multilib libc6-dbg:i386 gdb
+RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y git python3 python3-dev python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential cmake libedit-dev libxml2-dev python3-pip llvm gcc-multilib libc6-dbg:i386 gdb curl libncurses5
+# libncurses5 is needed for using pulps gdb
+# install precompiled pulp-riscv-gnu-toolchain from github
+RUN mkdir /pulp-riscv-gnu-toolchain &&\
+    curl -L https://github.com/pulp-platform/pulp-riscv-gnu-toolchain/releases/download/v1.0.16/v1.0.16-pulp-riscv-gcc-ubuntu-18.tar.bz2 --output /pulp-riscv-gnu-toolchain/gcc.tar.bz2 -s &&\ 
+    cd /pulp-riscv-gnu-toolchain &&\
+    tar xvjf gcc.tar.bz2 --strip-components=1; \
+    rm /pulp-riscv-gnu-toolchain/gcc.tar.bz2
+# Add source commands to bashrc so they are executed for every newly spawned terminal
+RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\ 
+    echo "cd /pulp-sdk-diana/pkg/sdk/dev" >> /etc/bash.bashrc &&\
+    echo "source sourceme.sh" >> /etc/bash.bashrc &&\
+    echo "source configs/pulpissimo.sh" >> /etc/bash.bashrc &&\
+    echo "source configs/platform-rtl.sh" >> /etc/bash.bashrc &&\
+    echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
+    echo "alias python=python3" >> /etc/bash.bashrc
 # Installing dependencies of the python package
 RUN pip3 install numpy decorator attrs scipy pytest
 # copy requirements in container 
@@ -12,6 +27,7 @@ COPY diana/requirements.txt /tvm-fork/diana/requirements.txt
 RUN pip3 install -r /tvm-fork/diana/requirements.txt
 # install DORY
 WORKDIR /
+RUN git clone https://github.com/dianaKUL/pulp-sdk-diana
 RUN git clone https://github.com/pulp-platform/dory.git
 WORKDIR /dory
 RUN git submodule update --remote --init dory/Hardware_targets/Diana/Backend_Kernels/dory-hal
