@@ -228,6 +228,19 @@ def test_dense(run, weight_bits, act):
     # Run the test
     driver(ir_module, params, run)
 
+@pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
+def test_add(run, act):
+    import single_layer.relay_add
+    # Set random seed for reproducible testing
+    np.random.seed(0)
+    ir_module, params = single_layer.relay_add.create_model(
+        act = act,
+        shift_bits = 4
+            )
+    # Run the test
+    driver(ir_module, params, run)
+
+
 def driver(mod: tvm.ir.IRModule, 
            params: Dict[str, tvm.nd.array],
            run: bool = False):
