@@ -36,7 +36,7 @@ PROFILER_WRAPPER_OBJS = $(subst .c,.o,$(PROFILER_WRAPPER_SRCS))
 INC_PATHS =  -I${STANDALONE_CRT_PATH}/include \
 			 -I${STANDALONE_CRT_PATH}/src/runtime/crt/include \
 			 -I${CODEGEN_PATH}/host/include \
-			 -I${PWD}/include/ \
+			 -I ./include/ \
 			 -I${DORY_INC_PATH}
 
 # Defining the source files for pulp-runtime

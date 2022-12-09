@@ -11,16 +11,8 @@ RUN mkdir /pulp-riscv-gnu-toolchain &&\
     cd /pulp-riscv-gnu-toolchain &&\
     tar xvjf gcc.tar.bz2 --strip-components=1; \
     rm /pulp-riscv-gnu-toolchain/gcc.tar.bz2
-# Add source commands to bashrc so they are executed for every newly spawned terminal
-RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\ 
-    echo "cd /pulp-sdk-diana/pkg/sdk/dev" >> /etc/bash.bashrc &&\
-    echo "source sourceme.sh" >> /etc/bash.bashrc &&\
-    echo "source configs/pulpissimo.sh" >> /etc/bash.bashrc &&\
-    echo "source configs/platform-rtl.sh" >> /etc/bash.bashrc &&\
-    echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
-    echo "alias python=python3" >> /etc/bash.bashrc
 # Installing dependencies of the python package
-RUN pip3 install numpy decorator attrs scipy pytest
+RUN pip3 install numpy decorator attrs scipy pytest 
 # copy requirements in container 
 COPY diana/requirements.txt /tvm-fork/diana/requirements.txt
 # Installing dependencies of the python package
@@ -36,3 +28,31 @@ RUN pip3 install -e .
 WORKDIR /
 ENV TVM_HOME=/tvm-fork
 ENV PYTHONPATH=/tvm-fork/python
+ENV INSTALL_DIR=/pulp-sdk-diana/pkg/sdk/dev/install/ws
+ENV PULP_CONFIGS_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/configs
+ENV PULP_TEMPLATE_ARGS=platform(name(rtl))
+ENV TARGET_INSTALL_DIR=/pulp-sdk-diana/pkg/sdk/dev/install
+ENV PULP_SDK_INSTALL=/pulp-sdk-diana/pkg/sdk/dev/install
+ENV PULP_RISCV_GCC_TOOLCHAIN=/pulp-riscv-gnu-toolchain
+ENV PULP_RUNTIME_GCC_TOOLCHAIN=/pulp-riscv-gnu-toolchain
+ENV PULP_SDK_HOME=/pulp-sdk-diana/pkg/sdk/dev
+ENV PULP_CURRENT_CONFIG=pulpissimo@config_file=chips/pulpissimo/pulpissimo.json
+ENV PULP_SDK_WS_INSTALL=/pulp-sdk-diana/pkg/sdk/dev/install/ws
+ENV PYTHONPATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/python:/tvm-fork/python
+ENV RULES_DIR=/pulp-sdk-diana/pkg/sdk/dev/install/rules
+ENV TILER_GENERATOR_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler/generators
+ENV LD_LIBRARY_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/lib
+ENV TILER_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler
+ENV PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PULP_CURRENT_CONFIG_ARGS=platform=rtl
+ENV RISCV=/pulp-riscv-gnu-toolchain
+WORKDIR /tvm-fork/diana/byoc
+# Add source commands to bashrc so they are executed for every newly spawned terminal
+#RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\ 
+#    echo "cd /pulp-sdk-diana/pkg/sdk/dev" >> /etc/bash.bashrc &&\
+#    echo "source sourceme.sh" >> /etc/bash.bashrc &&\
+#    echo "source configs/pulpissimo.sh" >> /etc/bash.bashrc &&\
+#    echo "source configs/platform-rtl.sh" >> /etc/bash.bashrc &&\
+#    echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
+#    echo "alias python=python3" >> /etc/bash.bashrc
+
