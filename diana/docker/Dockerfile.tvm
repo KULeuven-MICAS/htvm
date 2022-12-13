@@ -46,13 +46,3 @@ ENV TILER_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler
 ENV PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV PULP_CURRENT_CONFIG_ARGS=platform=rtl
 ENV RISCV=/pulp-riscv-gnu-toolchain
-WORKDIR /tvm-fork/diana/byoc
-# Add source commands to bashrc so they are executed for every newly spawned terminal
-#RUN echo "source /pulp-riscv-gnu-toolchain/sourceme.sh" >> /etc/bash.bashrc &&\ 
-#    echo "cd /pulp-sdk-diana/pkg/sdk/dev" >> /etc/bash.bashrc &&\
-#    echo "source sourceme.sh" >> /etc/bash.bashrc &&\
-#    echo "source configs/pulpissimo.sh" >> /etc/bash.bashrc &&\
-#    echo "source configs/platform-rtl.sh" >> /etc/bash.bashrc &&\
-#    echo "cd /tvm-fork" >> /etc/bash.bashrc &&\
-#    echo "alias python=python3" >> /etc/bash.bashrc
-

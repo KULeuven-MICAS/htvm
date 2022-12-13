@@ -44,10 +44,11 @@ pytest:
       - export PYTHONPATH=`pwd`/python
       - cd diana/byoc
       - echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
+      - ./copy_dory_files.sh
       - pytest -v test.py --junitxml=test_report.xml
     artifacts:
        when: always
        reports:
-          junit: test_report.xml
+          junit: /tvm-fork/diana/byoc/test_report.xml
     tags:
       - podman
