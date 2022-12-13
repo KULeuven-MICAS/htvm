@@ -7,7 +7,7 @@
 
 ################################### ALIASES ####################################
 
-BUILD_DIR := build
+BUILD_DIR := .
 DORY_DIR := dory
 # Include paths
 STANDALONE_CRT_PATH := $(abspath $(BUILD_DIR))/runtime

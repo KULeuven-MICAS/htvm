@@ -255,7 +255,8 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
 
 def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
                             fuse_layers: bool = True,
-                            build_path: str = "./build"):
+                            build_path: str = "./build",
+                            byoc_path: str = "."):
     '''
     Utility function that calls tvmc_wrapper and extracts output mlf
     (= TVM model library format) file.
@@ -266,28 +267,48 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
         if set to False. This tells relay to not fuse operations.
         This can be useful when debuggin the TVM-generated c code kernels.
     :param build_path: path to export mlf file output to
+    :param byoc_path: path to import Makefiles and C dependencies from
     '''
-    path = pathlib.Path(build_path)
+    byoc_path = pathlib.Path(byoc_path)
+    build_path = pathlib.Path(build_path)
     # check if build folder exists
-    if path.is_dir():
+    if build_path.is_dir():
         # remove build folder and all contents
-        shutil.rmtree(path)
+        shutil.rmtree(build_path)
         # make the build folder again
-        path.mkdir()
-    if not path.is_dir():
+        build_path.mkdir()
+    if not build_path.is_dir():
         # If no build folder exists create one
-        path.mkdir()
+        build_path.mkdir()
     # Compile new model
-    mlf_path = path / "model.tar"
+    mlf_path = build_path / "model.tar"
     tvmc_wrapper(model, target, fuse_layers, mlf_path)
     # extract mlf file
     mlf = tarfile.TarFile(mlf_path)
-    mlf.extractall(path)
+    mlf.extractall(build_path)
     # remove the archive
     os.remove(mlf_path)
+    # Copy over other necessary files
+    makefile_x86 = pathlib.Path("Makefile.x86")
+    makefile_pulprt = pathlib.Path("Makefile.pulprt")
+    src_dir = pathlib.Path("src")
+    include_dir = pathlib.Path("include")
+    dory_dir = pathlib.Path("dory")
+    # Copy makefiles
+    shutil.copyfile(src=byoc_path / makefile_x86, 
+                    dst=build_path / makefile_x86)
+    shutil.copyfile(src=byoc_path / makefile_pulprt, 
+                    dst=build_path / makefile_pulprt)
+    # Copy over src, include and dory folders
+    shutil.copytree(src=byoc_path / src_dir, 
+                    dst=build_path / src_dir, dirs_exist_ok=True)
+    shutil.copytree(src=byoc_path / include_dir, 
+                    dst=build_path / include_dir, dirs_exist_ok=True)
+    shutil.copytree(src=byoc_path / dory_dir, 
+                    dst=build_path / dory_dir)
 
 
-def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c", 
+def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build", 
                      init_value: int = 1, indefinite: bool = False, 
                      boot_analog: bool = False):
     '''
@@ -297,6 +318,7 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c",
     https://discuss.tvm.apache.org/t/
     how-to-get-the-input-and-output-of-relay-call-node/8743
     '''
+    directory = pathlib.Path(directory)
     def get_c_type(dtype):
         if dtype == "int8":
             return "int8_t"
@@ -318,7 +340,7 @@ def create_demo_file(mod: tvm.ir.IRModule, path: str = "src/demo.c",
     # Convert from TVM runtime datatype to numpy array
     output_shape = np.array(mod["main"].checked_type.ret_type.shape)
     output_dtype = mod["main"].checked_type.ret_type.dtype
-    create_demo_gdb_scripts(output_dtype)
+    create_demo_gdb_scripts(output_dtype, directory=directory)
     type_decl_out = get_c_type(output_dtype)
     if boot_analog:
         analog_boot_include = "#include <utils.h>\n"
@@ -391,7 +413,7 @@ int main(int argc, char** argv) {
     return 0;
 }
 """
-    with open(path, "w") as file:
+    with open(directory/ "src/demo.c", "w") as file:
         file.writelines(c_code)
 
 
@@ -416,7 +438,7 @@ def adapt_gcc_opt(makefile_path: str, opt_level: int):
         makefile.truncate()
         print(f"Changed opt_level to {opt_level} @ {makefile_path}")
 
-def make(device: str = "pulp", verbose: bool = False):
+def make(device: str = "pulp", make_dir: str = ".", verbose: bool = False):
     '''
     Invokes make from the current directory in a new subprocess
 
@@ -430,15 +452,15 @@ def make(device: str = "pulp", verbose: bool = False):
         makefile = "Makefile.pulprt"
     else:
         raise ValueError(f"Device: '{device}' not supported")
-    output = subprocess.check_output(["make", "-f", makefile, 
-                                         "clean", "all"],
+    output = subprocess.run(["make", "-f", makefile, 
+                                         "all"], cwd=make_dir,
                                          stderr=subprocess.STDOUT,
                                          universal_newlines=True)
     if verbose:
         print(output)
     print(f"Make: Built for '{device}'")
 
-def create_demo_gdb_scripts(dtype : str = "int8"):
+def create_demo_gdb_scripts(dtype : str = "int8", directory: str = "."):
     def get_gdb_type(dtype):
         if dtype == "int8":
             return "/d"
@@ -446,6 +468,7 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
             return "/f"
         else:
             raise NotImplementedError()
+    directory = pathlib.Path(directory)
     preamble =\
     'set print elements 0\n' +\
     'set print repeats 0\n' +\
@@ -457,7 +480,7 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
     'n\n' +\
     'n\n' +\
     'n\n' +\
-    'set logging file demo_x86.txt\n'
+    f'set logging file {directory.resolve()}/demo_x86.txt\n'
     pulp = preamble +\
     'target remote localhost:3333\n' +\
     'load\n' +\
@@ -465,20 +488,22 @@ def create_demo_gdb_scripts(dtype : str = "int8"):
     'c\n' +\
     'n\n' +\
     'n\n' +\
-    'set logging file demo.txt\n'
+    f'set logging file {directory.resolve()}/demo.txt\n'
     # These parts are common again
     common =\
     'set logging on\n' +\
     f'print {get_gdb_type(dtype)} *output@output_size\n' +\
     'set logging off\n'
-    with open("gdb_demo_x86.sh", "w") as gdb_script:
+    with open(directory / "gdb_demo_x86.sh", "w") as gdb_script:
         gdb_script.write(x86 + common)
         print(f"Made gdb_demo_x86.sh for {dtype}")
-    with open("gdb_demo.sh", "w") as gdb_script:
+    with open(directory / "gdb_demo.sh", "w") as gdb_script:
         gdb_script.write(pulp + common)
         print(f"Made gdb_demo.sh for {dtype}")
 
-def gdb(device: str, binary: str = None, gdb_script: str = None, 
+def gdb(device: str, binary: str = None,
+        directory: pathlib.Path = pathlib.Path("."),
+        gdb_script: str = None, 
         verbose : bool = False) -> np.typing.NDArray:
     """
     Calls gdb run (batch mode) for binary with gdb_script on specified device
@@ -486,33 +511,38 @@ def gdb(device: str, binary: str = None, gdb_script: str = None,
 
     returns the parsed gdb output in a numpy float array
     """
+    directory = pathlib.Path(directory)
     def print_error(log_file, gdb_output):
         print(f"Could not open {log_file} -> gdb output was:")
         print("============================================")
         print(gdb_output)
     if device == "x86":
-        log = pathlib.Path("demo_x86.txt")
+        log = directory / "demo_x86.txt"
         # Remove previous log before proceeding
         log.unlink(missing_ok=True)
-        binary = "build/demo" if binary is None else binary
-        gdb_script = "gdb_demo_x86.sh" if gdb_script is None else gdb_script
+        if binary is None:
+            binary = "demo" 
+        if gdb_script is None:
+            gdb_script = "gdb_demo_x86.sh"
         print(f"GDB: Running '{gdb_script}' on '{device}'...")
-        out = gdb_x86(gdb_script, binary, verbose)
+        out = gdb_x86(directory/gdb_script, directory/binary, verbose)
         print("GDB: Run on x86 finished")
         try:
-            result = get_gdb_output("demo_x86.txt")
+            result = get_gdb_output(log)
         except FileNotFoundError as e:
             print_error(log, out)
             return None
         return result
     elif device == "pulp":
-        log = pathlib.Path("demo.txt")
+        log = directory / "demo.txt"
         # Remove previous log before proceeding
         log.unlink(missing_ok=True)
-        binary = "build/pulpissimo/demo/demo" if binary is None else binary
-        gdb_script = "gdb_demo.sh" if gdb_script is None else gdb_script
+        if binary is None:
+            binary = "pulpissimo/demo/demo"
+        if gdb_script is None:
+            gdb_script = "gdb_demo.sh"
         print(f"GDB: Running '{gdb_script}' on '{device}'...")
-        out = gdb_pulp(gdb_script, binary, verbose)
+        out = gdb_pulp(directory/gdb_script, directory/binary, verbose)
         print("GDB: Run on PULP finished")
         #try:
         result = get_gdb_output(log)

@@ -15,7 +15,7 @@ import pytest
 
    
 
-def run_network_x86(mod, params):
+def run_network_x86(mod, params, directory):
     model = TVMCModel(mod, params)
     init_value = 1
 
@@ -25,12 +25,13 @@ def run_network_x86(mod, params):
     device = "x86"
     target = "c"
     fusion = False
-    utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion)
-    utils.create_demo_file(mod, init_value=init_value)
-    utils.adapt_gcc_opt("Makefile.x86", 0)
-    utils.make(device)
+    utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion, build_path=directory)
+    utils.create_demo_file(mod, init_value=init_value, directory=directory)
+    utils.adapt_gcc_opt(directory/"Makefile.x86", 0)
+    utils.make(device, make_dir=directory)
     print("TEST: obtaining X86 output")
-    result_x86 = utils.gdb(device, "build/demo", "gdb_demo_x86.sh")
+    result_x86 = utils.gdb(device=device, binary="demo", gdb_script="gdb_demo_x86.sh", 
+                           directory=directory)
     return result_x86
 
 def run_network_diana(name, f_create_model, precision, mixed, pulp_target, measurement="global", result_x86=None):
@@ -179,7 +180,7 @@ def print_results(result_dict):
                          ids = ["p(0,0)","p(1,1)","p(2,2)"])
 @pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
                          ids = ["s(1,1)","s(2,2)"])
-def test_conv2d(run, weight_bits, act, padding, strides):
+def test_conv2d(run, weight_bits, act, padding, strides, tmp_path):
     import single_layer.relay_conv2d 
     # Set random seed for reproducible testing
     np.random.seed(0)
@@ -191,7 +192,7 @@ def test_conv2d(run, weight_bits, act, padding, strides):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run)
+    driver(ir_module, params, run, tmp_path)
 
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
@@ -199,7 +200,7 @@ def test_conv2d(run, weight_bits, act, padding, strides):
                          ids = ["p(0,0)","p(1,1)","p(2,2)"])
 @pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
                          ids = ["s(1,1)","s(2,2)"])
-def test_dw_conv2d(run, weight_bits, act, padding, strides):
+def test_dw_conv2d(run, weight_bits, act, padding, strides, tmp_path):
     import single_layer.relay_dw_conv2d 
     # Set random seed for reproducible testing
     np.random.seed(0)
@@ -211,12 +212,12 @@ def test_dw_conv2d(run, weight_bits, act, padding, strides):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run)
+    driver(ir_module, params, run, tmp_path)
 
 
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
-def test_dense(run, weight_bits, act):
+def test_dense(run, weight_bits, act, tmp_path):
     import single_layer.relay_dense
     # Set random seed for reproducible testing
     np.random.seed(0)
@@ -226,10 +227,10 @@ def test_dense(run, weight_bits, act):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run)
+    driver(ir_module, params, run, tmp_path)
 
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
-def test_add(run, act):
+def test_add(run, act, tmp_path):
     import single_layer.relay_add
     # Set random seed for reproducible testing
     np.random.seed(0)
@@ -238,12 +239,13 @@ def test_add(run, act):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run)
+    driver(ir_module, params, run, tmp_path)
 
 
 def driver(mod: tvm.ir.IRModule, 
            params: Dict[str, tvm.nd.array],
-           run: bool = False):
+           run: bool = False,
+           build_dir: pathlib.Path = "build"):
     """
     Compile (and run) a model for DIANA for testing purposes
 
@@ -254,17 +256,21 @@ def driver(mod: tvm.ir.IRModule,
     # Create a TVMCModel
     model = TVMCModel(mod, params)
     # Create the model library format file and unpack
+    diana_dir = build_dir / "diana"
     utils.tvmc_compile_and_unpack(model, target="soma_dory, c",
-                                  fuse_layers = True)
+                                  fuse_layers=True,
+                                  build_path=diana_dir)
     # Create a demo file based on the model's inputs and outputs
-    utils.create_demo_file(mod, indefinite=False)
+    utils.create_demo_file(mod, indefinite=False, 
+                           directory=diana_dir)
     # Make for DIANA
-    utils.make("pulp")
+    utils.make("pulp", make_dir=diana_dir)
     if run:
         # Run the binary on DIANA
-        output_pulp = utils.gdb("pulp")
+        output_pulp = utils.gdb("pulp", directory=diana_dir)
         # Compile and run the network on x86
-        output_x86 = run_network_x86(mod, params)
+        x86_dir = build_dir / "x86"
+        output_x86 = run_network_x86(mod, params, x86_dir)
         # Compare X86 and DIANA outputs
         # Use allclose, not allequal (in case of floats)
         assert np.ma.allclose(output_x86,output_pulp)
