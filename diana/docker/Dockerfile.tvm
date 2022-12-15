@@ -25,24 +25,24 @@ WORKDIR /dory
 RUN git submodule update --remote --init dory/Hardware_targets/Diana/Backend_Kernels/dory-hal
 RUN git checkout 2fd2cdfc5fe1f0fb3a2ea9ed6687df740f5359cc && git submodule update
 RUN pip3 install -e .
-WORKDIR /
-ENV TVM_HOME=/tvm-fork
-ENV PYTHONPATH=/tvm-fork/python
-ENV INSTALL_DIR=/pulp-sdk-diana/pkg/sdk/dev/install/ws
-ENV PULP_CONFIGS_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/configs
-ENV PULP_TEMPLATE_ARGS=platform(name(rtl))
-ENV TARGET_INSTALL_DIR=/pulp-sdk-diana/pkg/sdk/dev/install
-ENV PULP_SDK_INSTALL=/pulp-sdk-diana/pkg/sdk/dev/install
-ENV PULP_RISCV_GCC_TOOLCHAIN=/pulp-riscv-gnu-toolchain
-ENV PULP_RUNTIME_GCC_TOOLCHAIN=/pulp-riscv-gnu-toolchain
-ENV PULP_SDK_HOME=/pulp-sdk-diana/pkg/sdk/dev
-ENV PULP_CURRENT_CONFIG=pulpissimo@config_file=chips/pulpissimo/pulpissimo.json
-ENV PULP_SDK_WS_INSTALL=/pulp-sdk-diana/pkg/sdk/dev/install/ws
-ENV PYTHONPATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/python:/tvm-fork/python
-ENV RULES_DIR=/pulp-sdk-diana/pkg/sdk/dev/install/rules
-ENV TILER_GENERATOR_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler/generators
-ENV LD_LIBRARY_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/lib
-ENV TILER_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler
-ENV PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENV PULP_CURRENT_CONFIG_ARGS=platform=rtl
-ENV RISCV=/pulp-riscv-gnu-toolchain
+WORKDIR /tvm-fork
+ENV TVM_HOME=/tvm-fork \
+    PYTHONPATH=/tvm-fork/python \
+    INSTALL_DIR=/pulp-sdk-diana/pkg/sdk/dev/install/ws \
+    PULP_CONFIGS_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/configs \
+    PULP_TEMPLATE_ARGS=platform(name(rtl)) \
+    TARGET_INSTALL_DIR=/pulp-sdk-diana/pkg/sdk/dev/install \
+    PULP_SDK_INSTALL=/pulp-sdk-diana/pkg/sdk/dev/install \
+    PULP_RISCV_GCC_TOOLCHAIN=/pulp-riscv-gnu-toolchain \
+    PULP_RUNTIME_GCC_TOOLCHAIN=/pulp-riscv-gnu-toolchain \
+    PULP_SDK_HOME=/pulp-sdk-diana/pkg/sdk/dev \
+    PULP_CURRENT_CONFIG=pulpissimo@config_file=chips/pulpissimo/pulpissimo.json \
+    PULP_SDK_WS_INSTALL=/pulp-sdk-diana/pkg/sdk/dev/install/ws \
+    PYTHONPATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/python:/tvm-fork/python \
+    RULES_DIR=/pulp-sdk-diana/pkg/sdk/dev/install/rules \
+    TILER_GENERATOR_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler/generators \
+    LD_LIBRARY_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/lib \
+    TILER_PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/auto-tiler \
+    PATH=/pulp-sdk-diana/pkg/sdk/dev/install/ws/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PULP_CURRENT_CONFIG_ARGS=platform=rtl \
+    RISCV=/pulp-riscv-gnu-toolchain

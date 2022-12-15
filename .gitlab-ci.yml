@@ -49,6 +49,6 @@ pytest:
     artifacts:
        when: always
        reports:
-          junit: /tvm-fork/diana/byoc/test_report.xml
+          junit: diana/byoc/test_report.xml
     tags:
       - podman
