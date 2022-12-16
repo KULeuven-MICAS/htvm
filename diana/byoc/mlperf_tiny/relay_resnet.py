@@ -22,7 +22,8 @@ import numpy as np
 def create_model(weight_bits, add_layout_transforms, mixed=False):
     input_shape = (1, 3, 32, 32)
     num_classes = 12    # NOTE originally 10, but made 12 to support diana accelerator
-    x = relay.var("input", relay.TensorType(input_shape, 'int8'))
+    # Using input_0 to be used with create_demo_file
+    x = relay.var("input_0", relay.TensorType(input_shape, 'int8'))
 
     # Assume incoming data layout is already correct
     #if add_layout_transforms:

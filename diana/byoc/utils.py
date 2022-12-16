@@ -310,6 +310,7 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
 
 def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build", 
                      init_value: int = 1, indefinite: bool = False, 
+                     no_of_inputs: int = 1,
                      boot_analog: bool = False):
     '''
     Function that creates a demo file in which inputs and outputs of the
@@ -317,6 +318,11 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
 
     https://discuss.tvm.apache.org/t/
     how-to-get-the-input-and-output-of-relay-call-node/8743
+
+    Note, the no_of_inputs argument currently sets extra inputs.
+    This is for example necessary in the testing of add layers (2 inputs)
+    Beware that this does not include any sanity checking!
+    It just takes the two most upfront inferred types!
     '''
     directory = pathlib.Path(directory)
     def get_c_type(dtype):
@@ -331,11 +337,14 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
     # otherwise checked_type will return a ValueError
     print("Creating demo file: Inferring shapes and types...")
     mod = relay.transform.InferType()(mod)
-    # Assuming the first argument is the user-supplied input
+    # Assuming the first arguments are the user-supplied input
     # Convert from TVM runtime datatype to numpy array
-    input_shape = np.array(mod["main"].checked_type.arg_types[0].shape)
-    input_dtype = mod["main"].checked_type.arg_types[0].dtype
-    type_decl_in = get_c_type(input_dtype)
+    input_shapes = []
+    input_dtypes = []
+    for i in range(no_of_inputs):
+        input_shapes.append(np.array(mod["main"].checked_type.arg_types[i].shape))
+        input_dtypes.append(mod["main"].checked_type.arg_types[i].dtype)
+    type_decls_in = [get_c_type(dtype) for dtype in input_dtypes]
     # Assuming there is only output to this Relay IRMod
     # Convert from TVM runtime datatype to numpy array
     output_shape = np.array(mod["main"].checked_type.ret_type.shape)
@@ -349,70 +358,59 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
         analog_boot_include = ""
         analog_boot_code = ""
     print("Creating demo file: Inferred shapes:")
-    print(f"\tinput ({input_dtype}):")
-    print(f"\t {input_shape}")
+    for i in range(no_of_inputs):
+        print(f"\tinput ({input_dtypes[i]}):")
+        print(f"\t {input_shapes[i]}")
     print(f"\toutput ({output_dtype}):")
     print(f"\t {output_shape}")
-    malloc_statements = \
-    f"    {type_decl_in} *input = ({type_decl_in}*)malloc_wrapper(input_size * sizeof({type_decl_in}));\n"+\
-    f"    {type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));"
-    free_statements = \
-        """
-        free_wrapper(input);
-        free_wrapper(output);
-        """
-    c_code = \
-        f"""#include <stdio.h>
-#include <stdint.h>
-#include "tvmgen_default.h"
-#include <tvm_runtime.h>
-#include <malloc_wrapper.h>
-#include <gdb_anchor.h>\n""" +\
+    mallocs = ""
+    frees = ""
+    sizes = ""
+    for i, type_d in enumerate(type_decls_in):
+        mallocs += f"  {type_d} *input_{i} = ({type_d}*)malloc_wrapper(input_{i}_size * sizeof({type_d}));\n"
+        frees += f"  free_wrapper(input_{i});\n"
+    mallocs += f"  {type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));\n\n"
+    frees += "    free_wrapper(output);\n"
+    inits = f"  // Fill input with {init_value}\n"
+    for i, input_shape in enumerate(input_shapes):
+        sizes += f"  uint32_t input_{i}_size = {np.prod(input_shape)};\n"
+        inits += "  for (uint32_t i = 0; i < input_"+str(i)+"_size; i++){\n"
+        inits += f"    input_{i}[i] = {init_value};\n"
+        inits += "  }\n"
+    sizes += f"  uint32_t output_size = {np.prod(output_shape)};\n\n"
+    call = "  struct tvmgen_default_outputs outputs = { .output = output, };\n"
+    call += "  struct tvmgen_default_inputs inputs = {\n"
+    for i in range(len(input_shapes)):
+        call += f"    .input_{i} = input_{i},\n"
+    call += "  };\n\n"
+    # Now produce the final c code
+    c_code = "#include <stdio.h>\n"  +\
+             "#include <stdint.h>\n" +\
+             "#include \"tvmgen_default.h\"\n" +\
+             "#include <tvm_runtime.h>\n" +\
+             "#include <malloc_wrapper.h>\n" +\
+             "#include <gdb_anchor.h>\n" +\
     analog_boot_include +\
-    """
-int abs(int v) {return v * ((v > 0) - (v < 0)); }
-
-int main(int argc, char** argv) {
-    """ +\
+    "\n" +\
+    "int abs(int v) {return v * ((v > 0) - (v < 0)); }\n\n" +\
+    "int main(int argc, char** argv) {\n" +\
     analog_boot_code +\
-    """
-    // Sizes automatically added by utils.create_demo_file\n""" + \
-    f"    uint32_t input_size = {np.prod(input_shape)};\n" + \
-    f"    uint32_t output_size = {np.prod(output_shape)};\n" + \
-    malloc_statements + \
-    """\n
-    // Fill first input with ones
-    for (uint32_t i = 0; i < input_size; i++){
-    """ + \
-    f"        input[i] = {init_value};\n" +\
-    """
-    }
-
-    struct tvmgen_default_outputs outputs = {
-        .output = output,
-    };
-    struct tvmgen_default_inputs inputs = {
-        .input = input,
-    };
-
-    int32_t status = 0;
-    """ + \
-    ("while (status == 0){   " if indefinite else "") + \
-    """
-         status = tvmgen_default_run(&inputs, &outputs);
-    """ + \
-    ("}" if indefinite else "") + \
-    """
-    gdb_anchor();
-    """ + \
-        free_statements + \
-        """
-    if(status != 0){
-        abort();
-    }
-    return 0;
-}
-"""
+    "  // Sizes automatically added by utils.create_demo_file\n" +\
+    sizes + \
+    mallocs + \
+    inits + "\n" +\
+    call + \
+    "  int32_t status = 0;\n" + \
+    ("  while (status == 0){\n   " if indefinite else "") + \
+    "  status = tvmgen_default_run(&inputs, &outputs);\n" + \
+    ("}\n" if indefinite else "") + \
+    "  gdb_anchor();" + \
+    frees + \
+    "  if(status != 0){\n" +\
+    "    abort();\n" +\
+    "  }\n" +\
+    "  return 0;\n" +\
+    "}\n"
     with open(directory/ "src/demo.c", "w") as file:
         file.writelines(c_code)
 

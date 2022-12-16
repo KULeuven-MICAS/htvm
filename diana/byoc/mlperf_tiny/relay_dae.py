@@ -21,7 +21,8 @@ import numpy as np
 def create_model(weight_bits, add_layout_transforms, mixed=False):
     input_shape = (1, 640)
     num_outputs = input_shape[1]
-    x = relay.var("input", relay.TensorType(input_shape, 'int8'))
+    # Using input_0 to be used with create_demo_file
+    x = relay.var("input_0", relay.TensorType(input_shape, 'int8'))
 
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, input_shape)

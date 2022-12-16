@@ -15,8 +15,9 @@ def create_model(act: bool = False,
     Generate a small relay graph that performs a DIANA-accelerator-
     eligible addition pattern with various parameters
     """
-    x = relay.var("input_x", relay.TensorType(input_shape, 'int8'))
-    y = relay.var("input_y", relay.TensorType(input_shape, 'int8'))
+    # Using input_0 and input_1 to be used with create_demo_file
+    x = relay.var("input_0", relay.TensorType(input_shape, 'int8'))
+    y = relay.var("input_1", relay.TensorType(input_shape, 'int8'))
     out = utils.relay_soma_add(x, y, "add_1", act = act, 
                                shift_bits = shift_bits)
     params = {}

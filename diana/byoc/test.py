@@ -228,9 +228,9 @@ def test_add(run, act, tmp_path):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run, tmp_path)
+    driver(ir_module, params, run, tmp_path, no_of_inputs=2)
 
-
+    
 def run_full_network(run, directory, network):
     np.random.seed(0)
     ir_module, params = network(
@@ -252,7 +252,8 @@ def test_mlperf_tiny_dae(run, tmp_path):
 def driver(mod: tvm.ir.IRModule, 
            params: Dict[str, tvm.nd.array],
            run: bool = False,
-           build_dir: pathlib.Path = "build"):
+           build_dir: pathlib.Path = "build",
+           no_of_inputs: int = 1):
     """
     Compile (and run) a model for DIANA for testing purposes
 
@@ -271,6 +272,7 @@ def driver(mod: tvm.ir.IRModule,
                                   byoc_path="/tvm-fork/diana/byoc")
     # Create a demo file based on the model's inputs and outputs
     utils.create_demo_file(mod, indefinite=False, 
+                           no_of_inputs = no_of_inputs,
                            directory=diana_dir)
     # Make for DIANA
     utils.make("pulp", make_dir=diana_dir)

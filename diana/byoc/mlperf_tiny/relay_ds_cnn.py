@@ -23,7 +23,8 @@ def create_model(weight_bits, add_layout_transforms, mixed):
     # Use transpose for better performance
     input_shape = (1, 1, 10, 49)
     num_classes = 12
-    x = relay.var("input", relay.TensorType(input_shape, 'int8'))
+    # Using input_0 to be used with create_demo_file
+    x = relay.var("input_0", relay.TensorType(input_shape, 'int8'))
 
     num_filters = 64
     #weights_shape = (num_filters, input_shape[1], 10, 4)

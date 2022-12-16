@@ -22,7 +22,8 @@ def create_model(weight_bits: int,
     Generate a small relay graph that performs a DIANA-accelerator-
     eligible convolution pattern with various parameters
     """
-    x = relay.var("input", relay.TensorType(input_shape, 'int8'))
+    # Using input_0 to be used with create_demo_file
+    x = relay.var("input_0", relay.TensorType(input_shape, 'int8'))
     # Get or generate weight_values
     if weights_values is None:
         weights = utils.create_random_array(weights_shape, 

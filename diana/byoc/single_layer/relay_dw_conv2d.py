@@ -21,7 +21,8 @@ def create_model(weight_bits: int,
     eligible depth-wise convolution pattern with various parameters
     """
     out_channels = weights_shape[0]
-    x = relay.var("input", relay.TensorType(input_shape, 'int8'))
+    # Using input_0 to be used with create_demo_file
+    x = relay.var("input_0", relay.TensorType(input_shape, 'int8'))
     if weights_values is None:
         weights = utils.create_random_array(weights_shape, f'int{weight_bits}')
     else:
