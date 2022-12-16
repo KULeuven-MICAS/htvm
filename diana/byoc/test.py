@@ -8,6 +8,10 @@ import subprocess
 import pathlib
 import shutil
 
+import mlperf_tiny.relay_ds_cnn
+import mlperf_tiny.relay_mobilenet
+import mlperf_tiny.relay_resnet
+import mlperf_tiny.relay_dae
 
 import tvm.relay as relay
 import pytest
@@ -156,22 +160,6 @@ def print_results(result_dict):
         print(f"\t\tDATA: {result_dict['size_dict']['data']:,} bytes")
         print(f"\t\tBSS : {result_dict['size_dict']['bss']:,} bytes")
 
-#import single_layer.relay_conv2d
-#import single_layer.relay_dense
-#import single_layer.relay_dw_conv2d
-#import single_layer.relay_add
-
-#single_layers = {
-#    "conv2d": single_layer.relay_conv2d.create_model,
-    #"dense": single_layer.relay_dense.create_model,
-    #"dw_conv2d": single_layer.relay_dw_conv2d.create_model,
-    #"add": single_layer.relay_add.create_model
-#}
-
-#@pytest.mark.parametrize("model", list(single_layers.values()),
-#                         ids=single_layers.keys())
-
-
 
 # Note that "run" is provided by the pytest argparser
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
@@ -229,6 +217,7 @@ def test_dense(run, weight_bits, act, tmp_path):
     # Run the test
     driver(ir_module, params, run, tmp_path)
 
+
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
 def test_add(run, act, tmp_path):
     import single_layer.relay_add
@@ -240,6 +229,24 @@ def test_add(run, act, tmp_path):
             )
     # Run the test
     driver(ir_module, params, run, tmp_path)
+
+
+def run_full_network(run, directory, network):
+    np.random.seed(0)
+    ir_module, params = network(
+        weight_bits = 8,
+        add_layout_transforms = True,
+        mixed = False)
+    driver(ir_module, params, run, directory)
+
+def test_mlperf_tiny_ds_cnn(run, tmp_path):
+    run_full_network(run, tmp_path, mlperf_tiny.relay_ds_cnn.create_model)
+def test_mlperf_tiny_resnet(run, tmp_path):
+    run_full_network(run, tmp_path, mlperf_tiny.relay_resnet.create_model)
+def test_mlperf_tiny_mobilenet(run, tmp_path):
+    run_full_network(run, tmp_path, mlperf_tiny.relay_mobilenet.create_model)
+def test_mlperf_tiny_dae(run, tmp_path):
+    run_full_network(run, tmp_path, mlperf_tiny.relay_dae.create_model)
 
 
 def driver(mod: tvm.ir.IRModule, 
@@ -257,9 +264,11 @@ def driver(mod: tvm.ir.IRModule,
     model = TVMCModel(mod, params)
     # Create the model library format file and unpack
     diana_dir = build_dir / "diana"
-    utils.tvmc_compile_and_unpack(model, target="soma_dory, c",
+    utils.tvmc_compile_and_unpack(model, 
+                                  target="soma_dory -layout_transform=0, c",
                                   fuse_layers=True,
-                                  build_path=diana_dir)
+                                  build_path=diana_dir,
+                                  byoc_path="/tvm-fork/diana/byoc")
     # Create a demo file based on the model's inputs and outputs
     utils.create_demo_file(mod, indefinite=False, 
                            directory=diana_dir)
@@ -279,12 +288,6 @@ def driver(mod: tvm.ir.IRModule,
 
 
 if __name__ == "__main__":
-    import mlperf_tiny
-    import mlperf_tiny.relay_ds_cnn
-    import mlperf_tiny.relay_mobilenet
-    import mlperf_tiny.relay_resnet
-    import mlperf_tiny.relay_dae
-
     # Test settings
     network_under_test = mlperf_tiny.relay_resnet
     precision = 2
