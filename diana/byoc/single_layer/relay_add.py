@@ -22,7 +22,7 @@ def create_model(act: bool = False,
     params = {}
     # create an IR module from the relay expression
     mod = tvm.ir.IRModule()
-    mod = mod.from_expr(x)
+    mod = mod.from_expr(out)
     return mod, params
 
 if __name__ == "__main__":

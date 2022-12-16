@@ -454,6 +454,7 @@ def make(device: str = "pulp", make_dir: str = ".", verbose: bool = False):
         raise ValueError(f"Device: '{device}' not supported")
     output = subprocess.run(["make", "-f", makefile, 
                                          "all"], cwd=make_dir,
+                                         check=True,
                                          stderr=subprocess.STDOUT,
                                          universal_newlines=True)
     if verbose:
