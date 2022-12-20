@@ -4,7 +4,8 @@ variables:
 stages:
     - build_container
     - build_tvm
-    - test_htvm
+    - test_unit
+    - test_e2e
 
 build_container:
     stage: build_container
@@ -34,21 +35,33 @@ build_tvm_release:
     tags:
       - podman
 
-pytest:
-    stage: test_htvm
+pytest_unit:
+    stage: test_unit
     image: $CI_REGISTRY_IMAGE:latest
     dependencies: 
       - build_tvm_release
     script:
-      - export TVM_HOME=`pwd`
-      - export PYTHONPATH=`pwd`/python
-      - cd diana/byoc
-      - echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
-      - bash copy_dory_files.sh
-      - pytest -v test.py --junitxml=test_report.xml
+      - pytest tests/python/contrib/test_soma_dory --junitxml=test_unit_report.xml
     artifacts:
        when: always
        reports:
-          junit: diana/byoc/test_report.xml
+          junit: test_unit_report.xml
+    tags:
+      - podman
+
+pytest_e2e:
+    stage: test_e2e
+    image: $CI_REGISTRY_IMAGE:latest
+    dependencies: 
+      - build_tvm_release
+    script:
+      - cd diana/byoc
+      - echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
+      - bash copy_dory_files.sh
+      - pytest -v test.py --junitxml=test_e2e_report.xml
+    artifacts:
+       when: always
+       reports:
+          junit: diana/byoc/test_e2e_report.xml
     tags:
       - podman

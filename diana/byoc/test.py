@@ -253,6 +253,7 @@ def driver(mod: tvm.ir.IRModule,
            params: Dict[str, tvm.nd.array],
            run: bool = False,
            build_dir: pathlib.Path = "build",
+           byoc_path: pathlib.Path = ".",
            no_of_inputs: int = 1):
     """
     Compile (and run) a model for DIANA for testing purposes
@@ -269,7 +270,7 @@ def driver(mod: tvm.ir.IRModule,
                                   target="soma_dory -layout_transform=0, c",
                                   fuse_layers=True,
                                   build_path=diana_dir,
-                                  byoc_path="/tvm-fork/diana/byoc")
+                                  byoc_path=byoc_path)
     # Create a demo file based on the model's inputs and outputs
     utils.create_demo_file(mod, indefinite=False, 
                            no_of_inputs = no_of_inputs,
