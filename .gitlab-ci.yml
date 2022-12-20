@@ -18,6 +18,9 @@ build_container:
       - sudo podman push $CI_REGISTRY_IMAGE:latest
     tags:
       - podman
+    only:
+        changes:
+            - diana/docker/*
 
 build_tvm_release:
     stage: build_tvm
