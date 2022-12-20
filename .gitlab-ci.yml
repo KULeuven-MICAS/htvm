@@ -41,6 +41,8 @@ pytest_unit:
     dependencies: 
       - build_tvm_release
     script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=$PYTHONPATH:`pwd`/python
       - pytest tests/python/contrib/test_soma_dory --junitxml=test_unit_report.xml
     artifacts:
        when: always
@@ -55,6 +57,8 @@ pytest_e2e:
     dependencies: 
       - build_tvm_release
     script:
+      - export TVM_HOME=`pwd`
+      - export PYTHONPATH=$PYTHONPATH:`pwd`/python
       - cd diana/byoc
       - echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
       - bash copy_dory_files.sh
