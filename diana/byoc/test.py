@@ -19,7 +19,7 @@ import pytest
 
    
 
-def run_network_x86(mod, params, directory):
+def run_network_x86(mod, params, directory, no_of_inputs: int = 1):
     model = TVMCModel(mod, params)
     init_value = 1
 
@@ -29,8 +29,10 @@ def run_network_x86(mod, params, directory):
     device = "x86"
     target = "c"
     fusion = False
-    utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion, build_path=directory)
-    utils.create_demo_file(mod, init_value=init_value, directory=directory)
+    utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion,
+                                  build_path=directory)
+    utils.create_demo_file(mod, init_value=init_value, 
+                           no_of_inputs=no_of_inputs, directory=directory)
     utils.adapt_gcc_opt(directory/"Makefile.x86", 0)
     utils.make(device, make_dir=directory)
     print("TEST: obtaining X86 output")
@@ -282,7 +284,8 @@ def driver(mod: tvm.ir.IRModule,
         output_pulp = utils.gdb("pulp", directory=diana_dir)
         # Compile and run the network on x86
         x86_dir = build_dir / "x86"
-        output_x86 = run_network_x86(mod, params, x86_dir)
+        output_x86 = run_network_x86(mod, params, x86_dir, 
+                                     no_of_inputs=no_of_inputs)
         # Compare X86 and DIANA outputs
         # Use allclose, not allequal (in case of floats)
         assert np.ma.allclose(output_x86,output_pulp)
