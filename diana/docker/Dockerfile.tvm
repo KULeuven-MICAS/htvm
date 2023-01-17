@@ -23,7 +23,7 @@ RUN git clone https://github.com/dianaKUL/pulp-sdk-diana
 RUN git clone https://github.com/pulp-platform/dory.git
 WORKDIR /dory
 RUN git submodule update --remote --init dory/Hardware_targets/Diana/Backend_Kernels/dory-hal
-RUN git checkout 2fd2cdfc5fe1f0fb3a2ea9ed6687df740f5359cc && git submodule update
+RUN git checkout 3f3c28a0c7b4848da9116e486ae698a958b0da95 && git submodule update
 RUN pip3 install -e .
 WORKDIR /tvm-fork
 ENV TVM_HOME=/tvm-fork \

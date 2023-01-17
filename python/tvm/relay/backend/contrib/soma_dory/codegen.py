@@ -53,7 +53,7 @@ def tvm_array_to_list(array):
     return [int(v) for v in array]
 
 
-def create_dory_conv_node(call, index: int):
+def create_dory_conv_node(call, index: int, relu: bool = False):
     """Populate a dory layer node with convolution args and attrs
     """
     if len(call.args) != 3:
@@ -83,8 +83,12 @@ def create_dory_conv_node(call, index: int):
     node.input_channels = int(input_dims[1])
     node.output_channels = int(output_dims[1])
 
-    node.output_activation_type = 'int'
+    if relu:
+        node.output_activation_type = 'uint'
+    else:
+        node.output_activation_type = 'int'
     node.output_activation_bits = 8
+    node.input_activation_type = 'int'
     node.input_activation_type = 'int'
     node.input_activation_bits = 8
     node.constant_names = []
@@ -120,7 +124,7 @@ def create_dory_conv_node(call, index: int):
 
 
 # TODO: merge create_dory_dense_node and create_dory_conv2d_node
-def create_dory_dense_node(call, index: int):
+def create_dory_dense_node(call, index: int, relu: bool = False):
     """Populate a dory layer node with fully-connected/dense args and attrs
     """
     if len(call.args) != 3:
@@ -150,7 +154,10 @@ def create_dory_dense_node(call, index: int):
     node.input_channels = int(input_dims[1])
     node.output_channels = int(output_dims[1])
 
-    node.output_activation_type = 'int'
+    if relu:
+        node.output_activation_type = 'uint'
+    else:
+        node.output_activation_type = 'int'
     node.output_activation_bits = 8
     node.input_activation_type = 'int'
     node.input_activation_bits = 8
@@ -188,50 +195,7 @@ def create_dory_dense_node(call, index: int):
     return node
 
 
-def create_dory_relu_node(prev_node):
-    """Populate a dory layer node with relu args
-    """
-    node = DORY_node()
-    name = 'Relu'
-    node.name = name
-    node.op_type = name
-    node.layout = 'CHW'
-    node.bias_bits = 32
-
-    # constant -> bn and relu
-    node.constant_type = 'int'
-    node.constant_bits = 32
-    node.constant_names = []
-    node.input_activation_type = 'int'
-    node.input_activation_bits = 32
-    node.output_activation_type = "uint"
-    node.output_activation_bits = 8
-    node.weight_type = 'int'
-    node.weight_bits = None
-    node.min, node.max = borders(node.output_activation_bits, node.output_activation_type == 'int')
-
-    # Ids of previous nodes, node can have multiple input nodes
-    node.number_of_input_nodes = 1
-    node.input_indexes = [prev_node.output_index]
-    node.output_index = str(int(prev_node.output_index) + 1)
-
-    # Constants: weights, bias, k, lambda
-    node.number_of_input_constants = 4      # ?
-
-    node.constant_names.append('outmul')
-    node.outmul = {
-        'value': 1,
-        'layout': ''
-    }
-    node.constant_names.append('outshift')
-    node.outshift = {
-        'value': prev_node.outshift['value'],
-        'layout': ''
-    }
-
-    return node
-
-def create_dory_add_node(call, index_1: int, index_2: int, index_out: int):
+def create_dory_add_node(call, index_1: int, index_2: int, index_out: int, relu: bool = False):
     add_call = get_root_call(call.op.body, "add")
     right_shift_call = get_root_call(call.op.body, "right_shift")
 
@@ -254,7 +218,10 @@ def create_dory_add_node(call, index_1: int, index_2: int, index_out: int):
     node.output_dimensions = tvm_array_to_list(input_dims[-2:])
     node.input_channels = int(input_dims[-3])
     node.output_channels = int(input_dims[-3])
-    node.output_activation_type = 'int'
+    if relu:
+        node.output_activation_type = 'uint'
+    else:
+        node.output_activation_type = 'int'
     node.output_activation_bits = 8
     node.input_activation_type = 'int'
     node.input_activation_bits = 8
@@ -337,21 +304,24 @@ class RelayToDoryGraph(ExprVisitor):
 
         pattern_name = call.op.attrs['Composite']
         clip_call = call.op.body.args[0]
+        # if clip_call.attrs.a_min == 0.0: --> detect relu operation
         if pattern_name == 'soma_dory.conv2d':
-            self.dory_graph.append(create_dory_conv_node(call, 0))
-
             if clip_call.attrs.a_min == 0.0:
-                self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
+                self.dory_graph.append(create_dory_conv_node(call, 0, True))
+            else:
+                self.dory_graph.append(create_dory_conv_node(call, 0, False))
         elif pattern_name == 'soma_dory.dense':
-            self.dory_graph.append(create_dory_dense_node(call, 0))
-
+            final_call = call.op.body
             if clip_call.attrs.a_min == 0.0:
-                self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
+                self.dory_graph.append(create_dory_dense_node(call, 0, True))
+            else:
+                self.dory_graph.append(create_dory_dense_node(call, 0, False))
         elif pattern_name == 'soma_dory.add':
-            self.dory_graph.append(create_dory_add_node(call, 0, 1, 2))
-
+            final_call = call.op.body
             if clip_call.attrs.a_min == 0.0:
-                self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
+                self.dory_graph.append(create_dory_add_node(call, 0, 1, 2, True))
+            else:
+                self.dory_graph.append(create_dory_add_node(call, 0, 1, 2, False))
 
         else:
             raise ValueError(f"Unknown composite function {pattern_name}")
