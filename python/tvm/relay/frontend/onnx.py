@@ -626,6 +626,16 @@ class Conv(OnnxOpConverter):
                 raise tvm.error.OpAttributeInvalid(msg.format(attr["auto_pad"]))
             attr.pop("auto_pad")
 
+        ignores = ['weight_bits', 'bias_bits', 'weight_data_layout', 'input_data_layout']
+        if "weight_bits" in attr and isinstance(kernel, relay.Constant):
+            # assume the weights are integer in this case
+            k_dtype = f"int{attr['weight_bits']}"
+
+            if attr['weight_bits'] < 8:
+                kernel = numpy_to_array(kernel.data.numpy().astype('int8'), k_dtype)
+            else:
+                kernel = relay.const(kernel.data.numpy().astype(k_dtype))
+
         attr["channels"] = kernel_shapes[0][0]
         out = AttrCvt(
             op_name=dimension_picker("conv"),
@@ -635,6 +645,7 @@ class Conv(OnnxOpConverter):
                 "pads": ("padding", 0),
                 "group": ("groups", 1),
             },
+            ignores=ignores,
             custom_check=dimension_constraint(),
         )([data, kernel], attr, params)
 

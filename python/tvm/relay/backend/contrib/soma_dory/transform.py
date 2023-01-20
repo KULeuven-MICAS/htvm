@@ -21,11 +21,62 @@ import tvm
 from tvm import relay
 from tvm.relay import transform
 from tvm.relay.expr_functor import ExprMutator, ExprVisitor
+from tvm.relay.dataflow_pattern import DFPatternCallback, rewrite, wildcard, is_op, is_constant
+
+
+class DianaOnnxRequantRewriter(DFPatternCallback):
+    """Rewriter for requant pattern
+    """
+    def __init__(self, require_type=False):
+        super().__init__(require_type)
+
+        self.x = wildcard()
+        self.div1 = is_constant()
+        self.div2 = is_constant()
+        self.maximum = is_constant()
+        self.minimum = is_constant()
+
+        div1 = is_op("divide")(self.x, self.div1)
+        div2 = is_op("divide")(div1, self.div2)
+        floor = is_op("floor")(div2)
+        maximum = is_op("maximum")(floor, self.maximum)
+        self.pattern = is_op("minimum")(maximum, self.minimum)
+
+    def callback(self, pre, post, node_map):
+        x = node_map[self.x][0]
+        div1 = node_map[self.div1][0]
+        div2 = node_map[self.div2][0]
+        maximum = node_map[self.maximum][0]
+        minimum = node_map[self.minimum][0]
+
+        shift_factor = int(np.log2(div1.data.numpy() * div2.data.numpy()))
+
+        x = relay.op.right_shift(x, relay.const(shift_factor))
+        x = relay.op.clip(x, a_min=int(maximum.data.numpy()), a_max=int(minimum.data.numpy()))
+        return relay.op.cast(x, 'int8')
+
+
+@tvm.ir.transform.module_pass(opt_level=0)
+class DianaOnnxRequantTransform:
+    """ Find and rewrite Diana ONNX requant to requant for internal use:
+        div->div->floor->max->min to
+        right_shift->clip->cast
+    """
+    def transform_module(
+        self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
+    ) -> tvm.ir.IRModule:
+        for global_var, func in mod.functions.items():
+            func = rewrite(DianaOnnxRequantRewriter(), func)
+            mod.update_func(global_var, func)
+        return mod
+
+    def __call__(self, mod):
+        return self.transform_module(mod)
 
 
 @transform.function_pass(opt_level=0)
 class SomaDoryGraphQuantizer(ExprMutator):
-    """Convert fake-quantized relay graph (from Soma ONNX file) into a real quantized relay graph
+    """Convert fake-quantized relay graph (from Diana ONNX file) into a real quantized relay graph
     """
 
     def __init__(self, dtype):
@@ -42,11 +93,8 @@ class SomaDoryGraphQuantizer(ExprMutator):
         new_args = [self.visit(arg) for arg in call.args]
 
         if call.op.name == 'nn.conv2d':
-            # cast the weights and output of the conv2d to integers if they are floats (assume they are constant)
+            # cast the output of the conv2d to int32 if they are floats (assume they are constant)
             w = new_args[1]
-            if not w.data.dtype.startswith('int'):
-                w = relay.const(w.data.numpy().astype(self.dtype))
-
             new_call = relay.op.nn.conv2d(new_args[0], w,
                                           strides=call.attrs.strides,
                                           padding=call.attrs.padding,
@@ -55,20 +103,14 @@ class SomaDoryGraphQuantizer(ExprMutator):
                                           out_dtype='int32',
                                           kernel_size=w.data.shape[-2:])
 
+        elif call.op.name == 'divide':
+            # cast the division factor to int
+            new_call = relay.op.divide(new_args[0], relay.const(new_args[1].data.numpy().astype(self.dtype)))
+
         elif call.op.name == 'nn.bias_add':
-            # cast bias to int32
+            # cast bias to int32 if it is a float (assume they are constant)
             new_args[1] = relay.const(new_args[1].data.numpy().astype('int32'))
             new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
-
-        elif call.op.name == 'divide':
-            # We currently assume that a divide op represents a requant operations after bias_add or element-wise sum
-            # Since the currently existing 'qnn.op.requantize' does not support floor-based rounding, we construct our
-            # own requantization using a set of primitive relay ops. We expect that the division factor is power-of-two
-            # and therefore our custom requantization is a sequence of these ops: right_shift, clip, cast.
-            shift_factor = int(np.log2(new_args[1].data.numpy()))
-            right_shift = relay.op.right_shift(new_args[0], relay.const(shift_factor))
-            clip = relay.op.clip(right_shift, a_min=-128, a_max=127)
-            new_call = relay.op.cast(clip, self.dtype)
 
         else:
             new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)

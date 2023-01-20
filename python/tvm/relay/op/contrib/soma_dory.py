@@ -31,28 +31,25 @@ from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 # don't remove this import even if it does not seem to be used
 # because this is the point where the soma_dory backend is registered
 import tvm.relay.backend.contrib.soma_dory
-from tvm.relay.backend.contrib.soma_dory.transform import SomaDoryGraphQuantizer, SomaDoryLayoutTransform
+from tvm.relay.backend.contrib.soma_dory.transform import DianaOnnxRequantTransform, SomaDoryGraphQuantizer, SomaDoryLayoutTransform
 
 
 logger = logging.getLogger("SomaDory")
 
 
-def _requant_clip_pattern(prev_op):
-    """Add pattern requant-optional_clip to prev_op"""
-
+def _requant_pattern(prev_op):
+    """Add requant pattern (right_shift -> clip -> cast) to prev_op"""
     right_shift = is_op("right_shift")(prev_op, is_constant())
     clip = is_op("clip")(right_shift)
     cast = is_op("cast")(clip).has_attr({"dtype": "int8"})
-    # optionally have extra clip/ReLU
-    act_or_cast = cast.optional(lambda x: is_op("clip")(x))
-    return act_or_cast
+    return cast
 
 
-def _biasadd_requant_clip_pattern(linear_op):
-    """Add pattern bias_add-requant-optional_clip to linear_op"""
+def _biasadd_requant_pattern(linear_op):
+    """Add pattern bias_add-requant to linear_op"""
 
     bias_add = is_op("nn.bias_add")(linear_op, wildcard())
-    return _requant_clip_pattern(bias_add)
+    return _requant_pattern(bias_add)
 
 
 def conv2d_pattern():
@@ -61,7 +58,7 @@ def conv2d_pattern():
     conv2d = is_op("nn.conv2d")(
             wildcard(), wildcard()
     )
-    return _biasadd_requant_clip_pattern(conv2d)
+    return _biasadd_requant_pattern(conv2d)
 
 
 def fully_connected_pattern():
@@ -70,7 +67,7 @@ def fully_connected_pattern():
     fc = is_op("nn.dense")(
         wildcard(), wildcard()
     )
-    return _biasadd_requant_clip_pattern(fc)
+    return _biasadd_requant_pattern(fc)
 
 
 def element_wise_add_pattern():
@@ -79,18 +76,14 @@ def element_wise_add_pattern():
     cast_a = is_op("cast")(wildcard()).has_attr({"dtype": "int32"})
     cast_b = is_op("cast")(wildcard()).has_attr({"dtype": "int32"})
     add = is_op("add")(cast_a, cast_b)
-    return _requant_clip_pattern(add)
+    return _requant_pattern(add)
 
 
-def _check_requant_clip(pattern):
-    """Check if requant-clip pattern is supported by the soma dory accelerator
+def _check_requant(pattern):
+    """Check if requant pattern is supported by the soma dory accelerator
     Returns None if not supported, returns the op before this sequence if supported
     """
-    if str(pattern.op.name) == "clip":
-        clip = pattern
-        cast = clip.args[0]
-    else:
-        cast = pattern
+    cast = pattern
     right_shift = cast.args[0].args[0]
 
     # Check range of shift factor
@@ -104,12 +97,12 @@ def _check_requant_clip(pattern):
     return right_shift_input
 
 
-def _check_biasadd_requant_clip(pattern):
-    """Check if bias_add-requant-clip pattern is supported by the soma dory accelerator
+def _check_biasadd_requant(pattern):
+    """Check if bias_add-requant pattern is supported by the soma dory accelerator
     Returns None if not supported, returns the linear op before this sequence if supported
     """
 
-    right_shift_input = _check_requant_clip(pattern)
+    right_shift_input = _check_requant(pattern)
     if right_shift_input is None:
         return None
 
@@ -132,7 +125,7 @@ def _check_biasadd_requant_clip(pattern):
 def check_conv2d(pattern, supported_weight_bits=[8, 2]):
     """Check if the Conv2D is supported by the soma dory accelerator"""
 
-    conv2d = _check_biasadd_requant_clip(pattern)
+    conv2d = _check_biasadd_requant(pattern)
     if conv2d is None:
         return False
 
@@ -186,7 +179,7 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
 def check_fully_connected(pattern):
     """Check if the fully connected layer is supported by the soma dory accelerator"""
 
-    fc = _check_biasadd_requant_clip(pattern)
+    fc = _check_biasadd_requant(pattern)
     if fc is None:
         return False
 
@@ -201,7 +194,7 @@ def check_element_wise_add(pattern, supported_weight_bits=[8]):
     if 8 not in supported_weight_bits:
         return False
 
-    add = _check_requant_clip(pattern)
+    add = _check_requant(pattern)
     if add is None:
         return False
 
@@ -252,7 +245,9 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
         supported_weight_bits_conv2d = [2]
 
     pipeline = [
+            DianaOnnxRequantTransform(),
             SomaDoryGraphQuantizer('int8'),
+            tvm.transform.PrintIR(),
             transform.InferType(),
             transform.MergeComposite(pattern_table(supported_weight_bits_conv2d)),
             transform.AnnotateTarget(["soma_dory"]),

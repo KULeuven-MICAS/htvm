@@ -336,23 +336,21 @@ class RelayToDoryGraph(ExprVisitor):
             raise ValueError(f"Expected call.op to be relay.Function, got {type(call.op)}")
 
         pattern_name = call.op.attrs['Composite']
+        clip_call = call.op.body.args[0]
         if pattern_name == 'soma_dory.conv2d':
             self.dory_graph.append(create_dory_conv_node(call, 0))
 
-            final_call = call.op.body
-            if final_call.op.name == 'clip':
+            if clip_call.attrs.a_min == 0.0:
                 self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
         elif pattern_name == 'soma_dory.dense':
             self.dory_graph.append(create_dory_dense_node(call, 0))
 
-            final_call = call.op.body
-            if final_call.op.name == 'clip':
+            if clip_call.attrs.a_min == 0.0:
                 self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
         elif pattern_name == 'soma_dory.add':
             self.dory_graph.append(create_dory_add_node(call, 0, 1, 2))
 
-            final_call = call.op.body
-            if final_call.op.name == 'clip':
+            if clip_call.attrs.a_min == 0.0:
                 self.dory_graph.append(create_dory_relu_node(self.dory_graph[-1]))
 
         else:
