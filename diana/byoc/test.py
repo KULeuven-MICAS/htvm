@@ -166,15 +166,27 @@ def print_results(result_dict):
 # Note that "run" is provided by the pytest argparser
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
-@pytest.mark.parametrize("padding", [(0, 0), (1, 1), (2, 2)], 
-                         ids = ["p(0,0)","p(1,1)","p(2,2)"])
 @pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
                          ids = ["s(1,1)","s(2,2)"])
-def test_conv2d(run, weight_bits, act, padding, strides, tmp_path):
+@pytest.mark.parametrize("kernel_and_padding", 
+                         [[[7, 7], (3, 3)], 
+                          [[5, 5], (2, 2)], 
+                          [[3, 3], (1, 1)], 
+                          [[1, 1], (0, 0)],
+                          [[7, 5], (3, 2)]],
+                         ids = ["k(7,7)_p(3,3)", 
+                                "k(5,5)_p(2,2)", 
+                                "k(3,3)_p(1,1)", 
+                                "k(1,1)_p(0,0)",
+                                "k(7,5)_p(3,2)"])
+def test_conv2d(run, weight_bits, act, kernel_and_padding, strides, tmp_path):
     import single_layer.relay_conv2d 
     # Set random seed for reproducible testing
     np.random.seed(0)
+    kernel_size = kernel_and_padding[0]
+    padding = kernel_and_padding[1]
     ir_module, params = single_layer.relay_conv2d.create_model(
+        weights_shape = tuple([32, 32] + kernel_size),
         weight_bits = weight_bits,
         act = act,
         padding = padding,
@@ -184,17 +196,30 @@ def test_conv2d(run, weight_bits, act, padding, strides, tmp_path):
     # Run the test
     driver(ir_module, params, run, tmp_path)
 
+
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
 @pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
-@pytest.mark.parametrize("padding", [(0, 0), (1, 1), (2, 2)], 
-                         ids = ["p(0,0)","p(1,1)","p(2,2)"])
 @pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
                          ids = ["s(1,1)","s(2,2)"])
-def test_dw_conv2d(run, weight_bits, act, padding, strides, tmp_path):
+@pytest.mark.parametrize("kernel_and_padding", 
+                         [[[7, 7], (3, 3)], 
+                          [[5, 5], (2, 2)], 
+                          [[3, 3], (1, 1)], 
+                          [[1, 1], (0, 0)],
+                          [[7, 5], (3, 2)]],
+                         ids = ["k(7,7)_p(3,3)", 
+                                "k(5,5)_p(2,2)", 
+                                "k(3,3)_p(1,1)", 
+                                "k(1,1)_p(0,0)",
+                                "k(7,5)_p(3,2)"])
+def test_dw_conv2d(run, weight_bits, act, kernel_and_padding, strides, tmp_path):
     import single_layer.relay_dw_conv2d 
     # Set random seed for reproducible testing
     np.random.seed(0)
+    kernel_size = kernel_and_padding[0]
+    padding = kernel_and_padding[1]
     ir_module, params = single_layer.relay_dw_conv2d.create_model(
+        weights_shape = tuple([32, 1] + kernel_size),
         weight_bits = weight_bits,
         act = act,
         padding = padding,

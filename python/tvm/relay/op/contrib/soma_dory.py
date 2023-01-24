@@ -142,16 +142,41 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
             attr = list(attr)
 
         if attr not in supported_values:
-            logger.warning(f"Expected nn.conv2d {name} to be one of {supported_values}, but got {attr}. \
-                            Acceleration for this op is not supported")
+            logger.warning(f"Expected nn.conv2d {name} to be one of {supported_values}, but got {attr}. " +\
+                            "Acceleration for this op is not supported")
             return False
 
         return True
 
+    def is_filter_and_padding_supported(attrs):
+        kernel_size = list(attrs["kernel_size"])
+        kernel_h = kernel_size[0]
+        kernel_w = kernel_size[1]
+        supported_kernels = [1, 3, 5, 7]
+        if (kernel_h not in supported_kernels) or (kernel_w not in supported_kernels):
+            logger.warning(f"Expected nn.conv2d kernel_size to only contain {supported_kernels}, " +\
+                            "but got {kernel_size}." +\
+                            "Acceleration for this op is not supported")
+            return False
+        # In topi, padding is [padt, padl, padb, padr]
+        padding = list(attrs["padding"])
+        # Only support equal left-right and top-bottom padding
+        if (padding[0] != padding[2]) or (padding[1] != padding[3]):
+            logger.warning(f"Acceleration of nn.conv2d with different top and bottom padding, " +\
+                            "or different left and right padding, is not supported.")
+            return False
+        # Only support output with same output dimension on accelerator
+        if (kernel_w - 2*padding[1] != 1) and (kernel_h - 2*padding[0] != 1):
+            logger.warning(f"Acceleration of nn.conv2d where output width dimension is not " +\
+                            "equal to the input width dimension is not supported.")
+            return False
+
+        return True
+
+
     # check conv2d attributes
-    if (#not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_size', [[1, 1], [3, 3], [5, 5], [7, 7]])
-        #or not is_conv2d_attr_value_supported(conv2d.attrs, 'padding', [4*[0], 4*[1], [1, 1, 0, 0], [0, 0, 1, 1]])
-        not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
+    if (not is_filter_and_padding_supported(conv2d.attrs)
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'dilation', [[1, 1]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', [1, num_output_channels])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_layout', ['OIHW'])
