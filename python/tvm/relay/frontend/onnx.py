@@ -23,6 +23,7 @@ import warnings
 from typing import Optional
 
 import numpy as np
+import numpy.typing as npt
 import tvm
 from tvm import relay
 from tvm.ir import IRModule
@@ -68,6 +69,42 @@ ONNX_DEFAULT_CONFIGS = {
     # performance issues.
     "use_nt_batch_matmul": True,
 }
+
+
+def numpy_to_array(np_arr: npt.NDArray, dtype: str):
+    """ Convert a numpy array to a TVM array with datatype `dtype`.
+    Although such a function exists in TVM, it does not support creating TVM arrays with dtypes
+    that are not supported in numpy, like 'int4' or 'int2'.
+    :param np_arr: the given numpy array
+    :param dtype:  the resulting data type of the TVM array
+    :return: the TVM array
+    """
+    assert np_arr.flags["C_CONTIGUOUS"]
+
+    arr = tvm.nd.empty(np_arr.shape, dtype)
+    data = np_arr.ctypes.data_as(ctypes.c_void_p)
+    nbytes = ctypes.c_size_t(np_arr.size * np_arr.dtype.itemsize)
+    tvm.nd.check_call(tvm.nd._LIB.TVMArrayCopyFromBytes(arr.handle, data, nbytes))
+
+    return arr
+
+
+def parse_quantlib_weight_bits_attr(attr, kernel):
+    """ Parse quantlib weight_bits attribute if present and modify the kernel datatype accordingly
+    Note that weight_bits is currently only parsed if kernel is a relay.Constant (freeze_params=True)
+    """
+    ignores = ['weight_bits', 'bias_bits', 'weight_data_layout', 'input_data_layout']
+
+    if "weight_bits" in attr and isinstance(kernel, relay.Constant):
+        # assume the weights are integer in this case
+        k_dtype = f"int{attr['weight_bits']}"
+
+        if attr['weight_bits'] < 8:
+            kernel = numpy_to_array(kernel.data.numpy().astype('int8'), k_dtype)
+        else:
+            kernel = relay.const(kernel.data.numpy().astype(k_dtype))
+
+    return kernel, ignores
 
 
 class onnx_input(list):
@@ -626,16 +663,7 @@ class Conv(OnnxOpConverter):
                 raise tvm.error.OpAttributeInvalid(msg.format(attr["auto_pad"]))
             attr.pop("auto_pad")
 
-        ignores = ['weight_bits', 'bias_bits', 'weight_data_layout', 'input_data_layout']
-        if "weight_bits" in attr and isinstance(kernel, relay.Constant):
-            # assume the weights are integer in this case
-            k_dtype = f"int{attr['weight_bits']}"
-
-            if attr['weight_bits'] < 8:
-                kernel = numpy_to_array(kernel.data.numpy().astype('int8'), k_dtype)
-            else:
-                kernel = relay.const(kernel.data.numpy().astype(k_dtype))
-
+        kernel, ignores = parse_quantlib_weight_bits_attr(attr, kernel)
         attr["channels"] = kernel_shapes[0][0]
         out = AttrCvt(
             op_name=dimension_picker("conv"),
@@ -1159,6 +1187,8 @@ class Gemm(OnnxOpConverter):
         beta = float(attr.get("beta", 1.0))
         transA = int(attr.get("transA", 0))
         transB = int(attr.get("transB", 0))
+
+        inputs[1], _ = parse_quantlib_weight_bits_attr(attr, inputs[1])
         # get number of channels
         channels = infer_channels(inputs[1], not transB)
         if transA:

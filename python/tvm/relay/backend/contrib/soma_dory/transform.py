@@ -24,8 +24,8 @@ from tvm.relay.expr_functor import ExprMutator, ExprVisitor
 from tvm.relay.dataflow_pattern import DFPatternCallback, rewrite, wildcard, is_op, is_constant
 
 
-class DianaOnnxRequantRewriter(DFPatternCallback):
-    """Rewriter for requant pattern
+class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
+    """Rewriter for digital requant pattern
     """
     def __init__(self, require_type=False):
         super().__init__(require_type)
@@ -36,11 +36,13 @@ class DianaOnnxRequantRewriter(DFPatternCallback):
         self.maximum = is_constant()
         self.minimum = is_constant()
 
-        div1 = is_op("divide")(self.x, self.div1)
+        cast = is_op("cast")(self.x)
+        div1 = is_op("divide")(cast, self.div1)
         div2 = is_op("divide")(div1, self.div2)
         floor = is_op("floor")(div2)
         maximum = is_op("maximum")(floor, self.maximum)
-        self.pattern = is_op("minimum")(maximum, self.minimum)
+        minimum = is_op("minimum")(maximum, self.minimum)
+        self.pattern = is_op("cast")(minimum)
 
     def callback(self, pre, post, node_map):
         x = node_map[self.x][0]
@@ -66,7 +68,7 @@ class DianaOnnxRequantTransform:
         self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
     ) -> tvm.ir.IRModule:
         for global_var, func in mod.functions.items():
-            func = rewrite(DianaOnnxRequantRewriter(), func)
+            func = rewrite(DianaOnnxDigitalRequantRewriter(), func)
             mod.update_func(global_var, func)
         return mod
 
@@ -75,8 +77,8 @@ class DianaOnnxRequantTransform:
 
 
 @transform.function_pass(opt_level=0)
-class SomaDoryGraphQuantizer(ExprMutator):
-    """Convert fake-quantized relay graph (from Diana ONNX file) into a real quantized relay graph
+class DianaOnnxIntegerize(ExprMutator):
+    """Cast linear layers in graph to integers and insert the necessary cast operations (from Diana ONNX file)
     """
 
     def __init__(self, dtype):
@@ -92,8 +94,8 @@ class SomaDoryGraphQuantizer(ExprMutator):
         new_fn = self.visit(call.op)
         new_args = [self.visit(arg) for arg in call.args]
 
-        if call.op.name == 'nn.conv2d':
-            # cast the output of the conv2d to int32 if they are floats (assume they are constant)
+        if call.op.name == 'nn.conv2d' and new_args[1].data.dtype.startswith('int'):
+            # ensure that the output of the conv2d op is int32
             w = new_args[1]
             new_call = relay.op.nn.conv2d(new_args[0], w,
                                           strides=call.attrs.strides,
@@ -103,14 +105,34 @@ class SomaDoryGraphQuantizer(ExprMutator):
                                           out_dtype='int32',
                                           kernel_size=w.data.shape[-2:])
 
-        elif call.op.name == 'divide':
-            # cast the division factor to int
-            new_call = relay.op.divide(new_args[0], relay.const(new_args[1].data.numpy().astype(self.dtype)))
+        elif call.op.name == 'nn.dense' and new_args[1].data.dtype.startswith('int'):
+            # ensure that the output of the dense op is int32
+            new_call = relay.op.nn.dense(new_args[0], new_args[1], out_dtype='int32')
 
-        elif call.op.name == 'nn.bias_add':
-            # cast bias to int32 if it is a float (assume they are constant)
-            new_args[1] = relay.const(new_args[1].data.numpy().astype('int32'))
-            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
+        elif call.op.name == 'nn.bias_add' or call.op.name == 'add':
+            # ensure bias data type matches the data type of previous operation's output type
+            # make sure to eliminate element-wise add, so check if rhs is constant
+            if isinstance(new_args[1], relay.Constant):
+                dtype = new_args[0].attrs.out_dtype
+                new_args[1] = relay.const(new_args[1].data.numpy().astype(dtype))
+                new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
+
+        elif call.op.name == 'divide':
+            # a divide operation with division factor > 1 that is a power of two, is assumed to be a dequant op
+            # put cast before this op in that case
+            x = new_args[0]
+            div = new_args[1].data.numpy().item()
+            if div >= 1 and np.log2(div).is_integer():
+                x = relay.cast(x, 'float')
+            new_call = relay.divide(x, new_args[1])
+
+        elif call.op.name == 'minimum':
+            # test if this is the last layer of the quantize sequence, if so, put cast after this op
+            new_call = relay.minimum(new_args[0], new_args[1])
+            if new_args[0].op.name == "maximum" and \
+               new_args[0].args[0].op.name == "floor" and \
+               new_args[0].args[0].args[0].op.name == "divide":
+                new_call = relay.cast(new_call, self.dtype)
 
         else:
             new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)

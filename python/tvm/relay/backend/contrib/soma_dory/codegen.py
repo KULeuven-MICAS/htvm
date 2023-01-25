@@ -304,24 +304,18 @@ class RelayToDoryGraph(ExprVisitor):
 
         pattern_name = call.op.attrs['Composite']
         clip_call = call.op.body.args[0]
-        # if clip_call.attrs.a_min == 0.0: --> detect relu operation
+
+        # if clip_call.attrs.a_min == 0.0 --> invoke relu operation
+        use_relu = clip_call.attrs.a_min == 0.0
+
         if pattern_name == 'soma_dory.conv2d':
-            if clip_call.attrs.a_min == 0.0:
-                self.dory_graph.append(create_dory_conv_node(call, 0, True))
-            else:
-                self.dory_graph.append(create_dory_conv_node(call, 0, False))
+            self.dory_graph.append(create_dory_conv_node(call, 0, use_relu))
+
         elif pattern_name == 'soma_dory.dense':
-            final_call = call.op.body
-            if clip_call.attrs.a_min == 0.0:
-                self.dory_graph.append(create_dory_dense_node(call, 0, True))
-            else:
-                self.dory_graph.append(create_dory_dense_node(call, 0, False))
+            self.dory_graph.append(create_dory_dense_node(call, 0, use_relu))
+
         elif pattern_name == 'soma_dory.add':
-            final_call = call.op.body
-            if clip_call.attrs.a_min == 0.0:
-                self.dory_graph.append(create_dory_add_node(call, 0, 1, 2, True))
-            else:
-                self.dory_graph.append(create_dory_add_node(call, 0, 1, 2, False))
+            self.dory_graph.append(create_dory_add_node(call, 0, 1, 2, use_relu))
 
         else:
             raise ValueError(f"Unknown composite function {pattern_name}")
