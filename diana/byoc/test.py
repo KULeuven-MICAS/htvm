@@ -163,23 +163,44 @@ def print_results(result_dict):
         print(f"\t\tBSS : {result_dict['size_dict']['bss']:,} bytes")
 
 
-# Note that "run" is provided by the pytest argparser
-@pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
-@pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
-@pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
-                         ids = ["s(1,1)","s(2,2)"])
-@pytest.mark.parametrize("kernel_and_padding", 
-                         [[[7, 7], (3, 3)], 
+
+def get_test_params():
+    """
+    This function is used to generate test parameter combinations for
+    * Conv2D layers
+    * DWConv2D layers
+
+    Why not use pytest.mark.parametrize?
+    --> this generates very long filenames with the tmp_path fixture
+    --> long paths end up in the debug section of the output binary
+    --> pulp RISC-V GDB will crash :(
+
+    This method has some upsides:
+    + Conv2D and DWConv2D use the same test params
+    + GDB doesn't crash :)
+
+    It has a very obvious downside:
+    - Testnames are now very cryptic e.g. "id3, id4" :(
+    """
+    import itertools
+    weight_bits = [8]
+    act = [False, True]
+    strides = [(1, 1), (2, 2)]
+    kernel_and_padding = [[[7, 7], (3, 3)],
                           [[5, 5], (2, 2)], 
                           [[3, 3], (1, 1)], 
                           [[1, 1], (0, 0)],
-                          [[7, 5], (3, 2)]],
-                         ids = ["k(7,7)_p(3,3)", 
-                                "k(5,5)_p(2,2)", 
-                                "k(3,3)_p(1,1)", 
-                                "k(1,1)_p(0,0)",
-                                "k(7,5)_p(3,2)"])
-def test_conv2d(run, weight_bits, act, kernel_and_padding, strides, tmp_path):
+                          [[7, 5], (3, 2)]]
+    combination = [weight_bits, act, strides, kernel_and_padding]
+    test_params = list(itertools.product(*combination))
+    test_ids = ["id" + str(i) for i in range(len(test_params))]
+    return test_params, test_ids
+
+
+test_params, test_ids = get_test_params()
+@pytest.mark.parametrize("test_params", test_params, ids=test_ids)
+def test_conv2d(run, test_params, tmp_path):
+    weight_bits, act, strides, kernel_and_padding = test_params
     import single_layer.relay_conv2d 
     # Set random seed for reproducible testing
     np.random.seed(0)
@@ -197,22 +218,9 @@ def test_conv2d(run, weight_bits, act, kernel_and_padding, strides, tmp_path):
     driver(ir_module, params, run, tmp_path)
 
 
-@pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
-@pytest.mark.parametrize("act", [False, True], ids = ["no_relu", "relu"])
-@pytest.mark.parametrize("strides", [(1, 1), (2, 2)], 
-                         ids = ["s(1,1)","s(2,2)"])
-@pytest.mark.parametrize("kernel_and_padding", 
-                         [[[7, 7], (3, 3)], 
-                          [[5, 5], (2, 2)], 
-                          [[3, 3], (1, 1)], 
-                          [[1, 1], (0, 0)],
-                          [[7, 5], (3, 2)]],
-                         ids = ["k(7,7)_p(3,3)", 
-                                "k(5,5)_p(2,2)", 
-                                "k(3,3)_p(1,1)", 
-                                "k(1,1)_p(0,0)",
-                                "k(7,5)_p(3,2)"])
-def test_dw_conv2d(run, weight_bits, act, kernel_and_padding, strides, tmp_path):
+@pytest.mark.parametrize("test_params", test_params, ids=test_ids)
+def test_dw_conv2d(run, test_params, tmp_path):
+    weight_bits, act, strides, kernel_and_padding = test_params
     import single_layer.relay_dw_conv2d 
     # Set random seed for reproducible testing
     np.random.seed(0)
