@@ -93,6 +93,8 @@ class DianaOnnxIntegerize(ExprMutator):
         """
         new_fn = self.visit(call.op)
         new_args = [self.visit(arg) for arg in call.args]
+        # Default case
+        new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
 
         if call.op.name == 'nn.conv2d' and new_args[1].data.dtype.startswith('int'):
             # ensure that the output of the conv2d op is int32
@@ -112,6 +114,7 @@ class DianaOnnxIntegerize(ExprMutator):
         elif call.op.name == 'nn.bias_add' or call.op.name == 'add':
             # ensure bias data type matches the data type of previous operation's output type
             # make sure to eliminate element-wise add, so check if rhs is constant
+            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
             if isinstance(new_args[1], relay.Constant):
                 dtype = new_args[0].attrs.out_dtype
                 new_args[1] = relay.const(new_args[1].data.numpy().astype(dtype))
@@ -133,9 +136,6 @@ class DianaOnnxIntegerize(ExprMutator):
                new_args[0].args[0].op.name == "floor" and \
                new_args[0].args[0].args[0].op.name == "divide":
                 new_call = relay.cast(new_call, self.dtype)
-
-        else:
-            new_call = relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
 
         return new_call
 
