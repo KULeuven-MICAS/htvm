@@ -276,7 +276,7 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
 
     pipeline = [
             DianaOnnxIntegerize('int8'),
-            DianaOnnxRequantTransform(),
+            #DianaOnnxRequantTransform(),
             transform.InferType(),
             transform.MergeComposite(pattern_table(supported_weight_bits_conv2d)),
             transform.AnnotateTarget(["soma_dory"]),
