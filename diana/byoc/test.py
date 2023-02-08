@@ -270,7 +270,8 @@ def run_full_network(run, directory, network):
     np.random.seed(0)
     ir_module, params = network(
         weight_bits = 8,
-        add_layout_transforms = True,
+        # Disable manually inserted layout transforms
+        add_layout_transforms = False,
         mixed = False)
     driver(ir_module, params, run, directory)
 
