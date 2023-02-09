@@ -274,19 +274,22 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
     if 'disable_digital_acc' in opts and opts['disable_digital_acc'] == '1':
         supported_weight_bits_conv2d = [2]
 
-    pipeline = [
-            DianaOnnxIntegerize('int8'),
-            #DianaOnnxRequantTransform(),
-            transform.InferType(),
-            transform.MergeComposite(pattern_table(supported_weight_bits_conv2d)),
-            transform.AnnotateTarget(["soma_dory"]),
-            transform.InferType(),
-            transform.PartitionGraph(),
-            transform.InferType(),
-        ]
+    pipeline = []
+    if 'requant_transform' not in opts or opts['requant_transform'] != '0':
+        pipeline.append(DianaOnnxRequantTransform())
+
+   
+    pipeline.append(DianaOnnxIntegerize('int8'))
+    pipeline.append(transform.InferType())
+    pipeline.append(transform.MergeComposite(pattern_table(supported_weight_bits_conv2d)))
+    pipeline.append(transform.AnnotateTarget(["soma_dory"]))
 
     if 'layout_transform' not in opts or opts['layout_transform'] != '0':
-        pipeline.insert(4, SomaDoryLayoutTransform())
+        pipeline.append(SomaDoryLayoutTransform())
+
+    pipeline.append(transform.InferType())
+    pipeline.append(transform.PartitionGraph())
+    pipeline.append(transform.InferType())
 
     seq = tvm.transform.Sequential(pipeline)
 

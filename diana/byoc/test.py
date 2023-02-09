@@ -303,7 +303,7 @@ def driver(mod: tvm.ir.IRModule,
     # Create the model library format file and unpack
     diana_dir = build_dir / "diana"
     utils.tvmc_compile_and_unpack(model, 
-                                  target="soma_dory, c",
+                                  target="soma_dory -requant_transform=0, c",
                                   fuse_layers=True,
                                   build_path=diana_dir,
                                   byoc_path=byoc_path)
