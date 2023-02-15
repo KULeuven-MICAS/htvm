@@ -53,12 +53,9 @@ def tvm_array_to_list(array):
     return [int(v) for v in array]
 
 
-def create_dory_conv_node(call, index: int, relu: bool = False):
+def create_dory_conv_node(call, index: int, relu: bool = False, is_analog: bool = False):
     """Populate a dory layer node with convolution args and attrs
     """
-    if len(call.args) != 3:
-        raise ValueError(f"Expected number of args for doma_dory.conv2d is 3, got {len(call.args)}")
-
     conv_call = get_root_call(call.op.body, "nn.conv2d")
     right_shift_call = get_root_call(call.op.body, "right_shift")
 
@@ -66,10 +63,17 @@ def create_dory_conv_node(call, index: int, relu: bool = False):
     input_dims = call.args[0].type_annotation.shape
     output_dims = right_shift_call.args[0].checked_type.shape
     weights = call.args[1].data
-    bias = call.args[2].data
-    shift_value = right_shift_call.args[1].data
 
-    assert weights.dtype[:3] == 'int', "Expected weights to be of type intX"
+    if is_analog:
+        mul_call = get_root_call(call.op.body, "multiply")
+        add_call = get_root_call(call.op.body, "add")
+        div_call = get_root_call(call.op.body, "divide")
+        bn_weight = mul_call.args[1].data
+        bn_bias = add_call.args[1].data
+    else:
+        bias = call.args[2].data
+
+    shift_value = right_shift_call.args[1].data
 
     node = Layer_node()
     node.name = 'Convolution'
@@ -87,16 +91,17 @@ def create_dory_conv_node(call, index: int, relu: bool = False):
         node.output_activation_type = 'uint'
     else:
         node.output_activation_type = 'int'
-    node.output_activation_bits = 8
+
+    node.output_activation_bits = 7 if is_analog else 8
     node.input_activation_type = 'int'
     node.input_activation_type = 'int'
     node.input_activation_bits = 8
     node.constant_names = []
     node.constant_type = 'int'
     node.constants_memory = None
-    node.constant_bits = None
+    node.constant_bits = 8
     node.weight_type = 'int'
-    node.weight_bits = int(weights.dtype[3:])   # extract the bit number from the dtype
+    node.weight_bits = 2 if is_analog else 8
     node.bias_bits = 32
     node.add_memory_and_MACs()
 
@@ -109,11 +114,25 @@ def create_dory_conv_node(call, index: int, relu: bool = False):
         'value': weights.numpy(),
         'layout': 'CoutCinK'
     }
-    node.constant_names.append('bias')
-    node.bias = {
-        'value': bias.numpy(),
-        'layout': ''
-    }
+
+    if is_analog:
+        node.constant_names.append('k')
+        node.k = {
+            'value': bn_weight.numpy(),
+            'layout': ''
+        }
+        node.constant_names.append('l')
+        node.l = {
+            'value': bn_bias.numpy(),
+            'layout': ''
+        }
+    else:
+        node.constant_names.append('bias')
+        node.bias = {
+            'value': bias.numpy(),
+            'layout': ''
+        }
+
     node.constant_names.append('outshift')
     node.outshift = {
         'value': shift_value,
@@ -311,7 +330,10 @@ class RelayToDoryGraph(ExprVisitor):
         # if clip_call.attrs.a_min == 0.0 --> invoke relu operation
         use_relu = clip_call.attrs.a_min == 0.0
 
-        if pattern_name == 'soma_dory.conv2d':
+        if pattern_name == 'soma_dory.aconv2d':
+            self.dory_graph.append(create_dory_conv_node(call, 0, use_relu, True))
+
+        elif pattern_name == 'soma_dory.conv2d':
             self.dory_graph.append(create_dory_conv_node(call, 0, use_relu))
 
         elif pattern_name == 'soma_dory.dense':
