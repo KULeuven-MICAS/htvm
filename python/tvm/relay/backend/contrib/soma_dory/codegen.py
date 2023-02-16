@@ -286,6 +286,9 @@ def create_dory_add_node(call, index_1: int, index_2: int, index_out: int, relu:
     node.output_index = str(index_out)
     # Constants: weights
     node.number_of_input_constants = 1
+    # TODO: Make this parameter based on Relay graph to avoid unnecessary data transfer
+    # Set branch out to 1 to enable DMA transfer
+    node.branch_out = 1
     return node
 
 
