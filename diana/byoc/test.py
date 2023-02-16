@@ -260,7 +260,7 @@ def test_add(run, act, tmp_path):
     np.random.seed(0)
     ir_module, params = single_layer.relay_add.create_model(
         act = act,
-        shift_bits = 4
+        shift_bits = 0
             )
     # Run the test
     driver(ir_module, params, run, tmp_path, no_of_inputs=2)

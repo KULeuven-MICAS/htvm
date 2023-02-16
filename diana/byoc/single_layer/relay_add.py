@@ -9,8 +9,8 @@ from numpy import typing as npt
 
 
 def create_model(act: bool = False,
-                 shift_bits: int = 4,
-                 input_shape: Tuple[int, ...] = (1,2,3,4)):
+                 shift_bits: int = 0,
+                 input_shape: Tuple[int, ...] = (1,16,32,32)):
     """
     Generate a small relay graph that performs a DIANA-accelerator-
     eligible addition pattern with various parameters
