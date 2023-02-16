@@ -53,7 +53,7 @@ def tvm_array_to_list(array):
     return [int(v) for v in array]
 
 
-def create_dory_conv_node(call, index: int, relu: bool = False, is_analog: bool = False):
+def create_dory_conv_node(call, index: int, relu: bool, is_analog: bool):
     """Populate a dory layer node with convolution args and attrs
     """
     conv_call = get_root_call(call.op.body, "nn.conv2d")
@@ -118,12 +118,12 @@ def create_dory_conv_node(call, index: int, relu: bool = False, is_analog: bool 
     if is_analog:
         node.constant_names.append('k')
         node.k = {
-            'value': bn_weight.numpy(),
+            'value': bn_weight.numpy().flatten(),
             'layout': ''
         }
         node.constant_names.append('l')
         node.l = {
-            'value': bn_bias.numpy(),
+            'value': bn_bias.numpy().flatten(),
             'layout': ''
         }
     else:
@@ -334,7 +334,7 @@ class RelayToDoryGraph(ExprVisitor):
             self.dory_graph.append(create_dory_conv_node(call, 0, use_relu, True))
 
         elif pattern_name == 'soma_dory.conv2d':
-            self.dory_graph.append(create_dory_conv_node(call, 0, use_relu))
+            self.dory_graph.append(create_dory_conv_node(call, 0, use_relu, False))
 
         elif pattern_name == 'soma_dory.dense':
             self.dory_graph.append(create_dory_dense_node(call, 0, use_relu))
