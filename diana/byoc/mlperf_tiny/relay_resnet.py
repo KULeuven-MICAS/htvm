@@ -49,7 +49,7 @@ def create_model(weight_bits, add_layout_transforms, mixed=False):
     bias = create_random_array(weights_shape[0], 'int32')
     y, params_conv3 = relay_soma_conv2d(y, 'conv3', weights, bias, padding=(1, 1), act=False, shift_bits=4)
 
-    x = relay_soma_add(x, y, "add_1", act=True)
+    x = relay_soma_add(x, y, "add_1")
 
     # Second stack
     num_filters_2 = 32
@@ -68,7 +68,7 @@ def create_model(weight_bits, add_layout_transforms, mixed=False):
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv6 = relay_soma_conv2d(x, 'conv6', weights, bias, strides=(2, 2), act=False, shift_bits=4)
 
-    x = relay_soma_add(x, y, "add_2", act=True)
+    x = relay_soma_add(x, y, "add_2")
 
     # Third stack
     num_filters_3 = 64
@@ -90,7 +90,7 @@ def create_model(weight_bits, add_layout_transforms, mixed=False):
     bias = create_random_array(weights_shape[0], 'int32')
     x, params_conv9 = relay_soma_conv2d(x, 'conv9', weights, bias, strides=(2, 2), act=False, shift_bits=4)
 
-    x = relay_soma_add(x, y, "add_3", act=True)
+    x = relay_soma_add(x, y, "add_3")
 
     if add_layout_transforms:
         x = relay_soma_layout_transform(x, (1, num_filters_3, 8, 8))

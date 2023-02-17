@@ -158,14 +158,12 @@ def relay_soma_dense(input_tensor: relay.Var, layer_name: str,
 def relay_soma_add(input_tensor_a: relay.Var,
                    input_tensor_b: relay.Var,
                    layer_name: str,
-                   act: bool = False,
                    shift_bits: int = 0):
     """
     Creates a relay element-wise-add op which is SOMA compatible
     :param input_tensor_a: relay.Var for input tensor A
     :param input_tensor_b: relay.Var for input tensor B
     :param layer_name: string that determines relay variable naming
-    :param act: bool that toggles extra ReLU to be added (see below)
     :shift_bits: int that sets amount of bits to shift right. Value must be between [0,31]
     """
     # define operations
@@ -175,10 +173,6 @@ def relay_soma_add(input_tensor_a: relay.Var,
     x = relay.op.right_shift(x, relay.const(shift_bits))
     x = relay.op.clip(x, a_min=-128, a_max=127)
     x = relay.op.cast(x, 'int8')
-
-    # Optional: ReLU
-    if act:
-        x = relay.op.clip(x, a_min=0, a_max=127)
 
     return x
 
