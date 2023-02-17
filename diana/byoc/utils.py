@@ -106,12 +106,13 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                            out_dtype=b_value.dtype)
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits))
-    x = relay.op.clip(x, a_min=-128, a_max=127)
-    x = relay.op.cast(x, 'int8')
-
     # Optional: ReLU
     if act:
         x = relay.op.clip(x, a_min=0, a_max=127)
+    else:
+        x = relay.op.clip(x, a_min=-128, a_max=127)
+    x = relay.op.cast(x, 'int8')
+
 
     return x, params
 
@@ -145,13 +146,12 @@ def relay_soma_dense(input_tensor: relay.Var, layer_name: str,
     x = relay.op.nn.dense(input_tensor, w, out_dtype=b_value.dtype)
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits))
-    x = relay.op.clip(x, a_min=-128, a_max=127)
-    x = relay.op.cast(x, 'int8')
-
     # Optional: ReLU
     if act:
         x = relay.op.clip(x, a_min=0, a_max=127)
-
+    else:
+        x = relay.op.clip(x, a_min=-128, a_max=127)
+    x = relay.op.cast(x, 'int8')
     return x, params
 
 
