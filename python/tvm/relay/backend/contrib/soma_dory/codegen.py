@@ -268,7 +268,7 @@ def create_dory_add_node(call, index_1: int, index_2: int, index_out: int, relu:
     }
     node.constant_names.append('outshift')
     node.outshift = {
-        'value': 0,
+        'value': shift_value,
         'layout': ''
     }
     node.constant_type = 'int'
