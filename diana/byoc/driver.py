@@ -1,5 +1,6 @@
 from tvm.driver.tvmc.model import TVMCModel
 from typing import Dict
+from abc import ABC, abstractmethod
 import tvm
 import utils
 import numpy as np
@@ -14,6 +15,64 @@ import mlperf_tiny.relay_resnet
 import mlperf_tiny.relay_dae
 
 import tvm.relay as relay
+
+
+class Driver(ABC):
+    def __init__(self,
+                 mod: tvm.ir.IRModule,
+                 params: Dict[str, tvm.nd.array],
+                 build_dir: pathlib.Path = "build",
+                 byoc_path: pathlib.Path = ".",
+                 no_of_inputs: int = 1):
+        self.model = TVMCModel(mod, params)
+        self.build_dir = build_dir
+        self.byoc_path = byoc_path
+        self.no_of_inputs = no_of_inputs
+
+    @abstractmethod
+    def compile(gcc_opt: int = 3, fusion: bool = False):
+        raise NotImplementedError()
+
+    def add_profiler():
+        raise NotImplementedError()
+
+    @abstractmethod
+    def run():
+        raise NotImplementedError()
+
+    def profile():
+        raise NotImplementedError()
+
+
+class X86Driver(Driver):
+    def __init__(self,
+                 mod: tvm.ir.IRModule,
+                 params: Dict[str, tvm.nd.array],
+                 build_dir: pathlib.Path = "build",
+                 byoc_path: pathlib.Path = ".",
+                 no_of_inputs: int = 1):
+        super(X86Driver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
+        self.device = "x86"
+        self.build_dir = self.build_dir / "x86"
+        self.target = "c"
+        self.init_value = 1
+
+    def compile(self, gcc_opt: int = 3, fusion: bool = False):
+        utils.tvmc_compile_and_unpack(self.model, target=self.target,
+                                      fuse_layers=fusion,
+                                      byoc_path=self.byoc_path,
+                                      build_path=self.build_dir)
+        utils.create_demo_file(self.model.mod, init_value=self.init_value,
+                               no_of_inputs=self.no_of_inputs,
+                               directory=self.build_dir)
+        utils.adapt_gcc_opt(self.build_dir/"Makefile.x86", 0)
+        utils.make(self.device, make_dir=self.build_dir)
+
+    def run(self):
+        result_x86 = utils.gdb(device=self.device, binary="demo",
+                               gdb_script="gdb_demo_x86.sh",
+                               directory=self.build_dir)
+        return result_x86
 
 
 def driver(mod: tvm.ir.IRModule, 
@@ -48,34 +107,13 @@ def driver(mod: tvm.ir.IRModule,
         # Run the binary on DIANA
         output_pulp = utils.gdb("pulp", directory=diana_dir)
         # Compile and run the network on x86
-        x86_dir = build_dir / "x86"
-        output_x86 = run_network_x86(mod, params, x86_dir, 
-                                     no_of_inputs=no_of_inputs)
+        d_x86 = X86Driver(mod, params, build_dir, byoc_path, no_of_inputs)
+        d_x86.compile(gcc_opt=0, fusion=False)
+        output_x86 = d_x86.run()
         # Compare X86 and DIANA outputs
         # Use allclose, not allequal (in case of floats)
         assert np.ma.allclose(output_x86,output_pulp)
 
-
-def run_network_x86(mod, params, directory, no_of_inputs: int = 1):
-    model = TVMCModel(mod, params)
-    init_value = 1
-
-    # int2 verification is not available on X86
-    # run on X86
-    print("TEST: Compiling for X86")
-    device = "x86"
-    target = "c"
-    fusion = False
-    utils.tvmc_compile_and_unpack(model, target=target, fuse_layers=fusion,
-                                  build_path=directory)
-    utils.create_demo_file(mod, init_value=init_value, 
-                           no_of_inputs=no_of_inputs, directory=directory)
-    utils.adapt_gcc_opt(directory/"Makefile.x86", 0)
-    utils.make(device, make_dir=directory)
-    print("TEST: obtaining X86 output")
-    result_x86 = utils.gdb(device=device, binary="demo", gdb_script="gdb_demo_x86.sh", 
-                           directory=directory)
-    return result_x86
 
 
 def run_network_diana(name, f_create_model, precision, mixed, pulp_target, measurement="global", result_x86=None):
@@ -170,8 +208,6 @@ def run_network_diana(name, f_create_model, precision, mixed, pulp_target, measu
             "cycles": cycles, 
             "heap_usage": heap_usage, 
             "size_dict": size_dict}
-
-
 
 def print_results(result_dict):
     if type(result_dict['cycles']) == int:
