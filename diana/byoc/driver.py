@@ -56,12 +56,14 @@ class X86Driver(Driver):
         self.build_dir = self.build_dir / "x86"
         self.target = "c"
         self.init_value = 1
+        utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
 
     def compile(self, gcc_opt: int = 3, fusion: bool = False):
         utils.tvmc_compile_and_unpack(self.model, target=self.target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
-                                      build_path=self.build_dir)
+                                      build_path=self.build_dir,
+                                      device="x86")
         utils.create_demo_file(self.model.mod, init_value=self.init_value,
                                no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)

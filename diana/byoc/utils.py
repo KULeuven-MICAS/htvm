@@ -250,7 +250,8 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
 def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
                             fuse_layers: bool = True,
                             build_path: str = "./build",
-                            byoc_path: str = "."):
+                            byoc_path: str = ".",
+                            device="pulp"):
     '''
     Utility function that calls tvmc_wrapper and extracts output mlf
     (= TVM model library format) file.
@@ -261,10 +262,30 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
         if set to False. This tells relay to not fuse operations.
         This can be useful when debuggin the TVM-generated c code kernels.
     :param build_path: path to export mlf file output to
-    :param byoc_path: path to import Makefiles and C dependencies from
     '''
-    byoc_path = pathlib.Path(byoc_path)
+    #FIXME remove me after uniformisation
+    if device == "pulp":
+        create_build_dir(byoc_path = byoc_path,
+                         build_path = build_path,
+                         device = "pulp")
+    # Compile new model
+    mlf_path = build_path / "model.tar"
+    tvmc_wrapper(model, target, fuse_layers, mlf_path)
+    # extract mlf file
+    mlf = tarfile.TarFile(mlf_path)
+    mlf.extractall(build_path)
+    # remove the archive
+    os.remove(mlf_path)
+
+
+def create_build_dir(byoc_path: str = ".",
+                     build_path: str = "./build",
+                     device: str = "pulp"):
+    """
+    param byoc_path: path to import Makefiles and C dependencies from
+    """
     build_path = pathlib.Path(build_path)
+    byoc_path = pathlib.Path(byoc_path)
     # check if build folder exists
     if build_path.is_dir():
         # remove build folder and all contents
@@ -274,33 +295,28 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
     if not build_path.is_dir():
         # If no build folder exists create one
         build_path.mkdir()
-    # Compile new model
-    mlf_path = build_path / "model.tar"
-    tvmc_wrapper(model, target, fuse_layers, mlf_path)
-    # extract mlf file
-    mlf = tarfile.TarFile(mlf_path)
-    mlf.extractall(build_path)
-    # remove the archive
-    os.remove(mlf_path)
     # Copy over other necessary files
-    makefile_x86 = pathlib.Path("Makefile.x86")
-    makefile_pulprt = pathlib.Path("Makefile.pulprt")
+    if device == "pulp":
+        makefile_pulprt = pathlib.Path("Makefile.pulprt")
+        dory_dir = pathlib.Path("dory")
+        shutil.copyfile(src=byoc_path / makefile_pulprt, 
+                        dst=build_path / makefile_pulprt)
+        shutil.copytree(src=byoc_path / dory_dir, 
+                        dst=build_path / dory_dir)
+    elif device == "x86":
+        makefile_x86 = pathlib.Path("Makefile.x86")
+        shutil.copyfile(src=byoc_path / makefile_x86, 
+                        dst=build_path / makefile_x86)
+    else:
+        raise NotImplementedError
     src_dir = pathlib.Path("src")
     include_dir = pathlib.Path("include")
-    dory_dir = pathlib.Path("dory")
-    # Copy makefiles
-    shutil.copyfile(src=byoc_path / makefile_x86, 
-                    dst=build_path / makefile_x86)
-    shutil.copyfile(src=byoc_path / makefile_pulprt, 
-                    dst=build_path / makefile_pulprt)
     # Copy over src, include and dory folders
     shutil.copytree(src=byoc_path / src_dir, 
                     dst=build_path / src_dir, dirs_exist_ok=True)
     shutil.copytree(src=byoc_path / include_dir, 
                     dst=build_path / include_dir, dirs_exist_ok=True)
-    shutil.copytree(src=byoc_path / dory_dir, 
-                    dst=build_path / dory_dir)
-
+    
 
 def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build", 
                      init_value: int = 1, indefinite: bool = False, 
