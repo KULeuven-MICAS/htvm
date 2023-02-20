@@ -53,21 +53,20 @@ class X86Driver(Driver):
                  no_of_inputs: int = 1):
         super(X86Driver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
         self.device = "x86"
-        self.build_dir = self.build_dir / "x86"
+        self.build_dir = self.build_dir / self.device
         self.target = "c"
         self.init_value = 1
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
 
-    def compile(self, gcc_opt: int = 3, fusion: bool = False):
+    def compile(self, gcc_opt: int = 0, fusion: bool = False):
         utils.tvmc_compile_and_unpack(self.model, target=self.target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
-                                      build_path=self.build_dir,
-                                      device="x86")
+                                      build_path=self.build_dir)
         utils.create_demo_file(self.model.mod, init_value=self.init_value,
                                no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
-        utils.adapt_gcc_opt(self.build_dir/"Makefile.x86", 0)
+        utils.adapt_gcc_opt(self.build_dir/"Makefile.x86", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
 
     def run(self):
@@ -75,6 +74,39 @@ class X86Driver(Driver):
                                gdb_script="gdb_demo_x86.sh",
                                directory=self.build_dir)
         return result_x86
+
+class DianaDriver(Driver):
+    def __init__(self,
+                 mod: tvm.ir.IRModule,
+                 params: Dict[str, tvm.nd.array],
+                 build_dir: pathlib.Path = "build",
+                 byoc_path: pathlib.Path = ".",
+                 no_of_inputs: int = 1):
+        super(DianaDriver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
+        self.device = "pulp"
+        self.build_dir = self.build_dir / self.device
+        # TODO: move -requant_transform somewhere else?
+        self.target="soma_dory -requant_transform=0, c"
+        self.init_value = 1
+        utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
+
+    def compile(self, gcc_opt: int = 3, fusion: bool = True):
+        utils.tvmc_compile_and_unpack(self.model, target=self.target,
+                                      fuse_layers=fusion,
+                                      byoc_path=self.byoc_path,
+                                      build_path=self.build_dir)
+        utils.create_demo_file(self.model.mod, init_value=self.init_value,
+                               no_of_inputs=self.no_of_inputs,
+                               directory=self.build_dir)
+        utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
+        utils.make(self.device, make_dir=self.build_dir)
+
+    def run(self):
+        result = utils.gdb(device=self.device, 
+                           binary="pulpissimo/demo/demo",
+                           gdb_script="gdb_demo.sh",
+                           directory=self.build_dir)
+        return result
 
 
 def driver(mod: tvm.ir.IRModule, 
@@ -93,21 +125,13 @@ def driver(mod: tvm.ir.IRModule,
     # Create a TVMCModel
     model = TVMCModel(mod, params)
     # Create the model library format file and unpack
-    diana_dir = build_dir / "diana"
-    utils.tvmc_compile_and_unpack(model, 
-                                  target="soma_dory -requant_transform=0, c",
-                                  fuse_layers=True,
-                                  build_path=diana_dir,
-                                  byoc_path=byoc_path)
-    # Create a demo file based on the model's inputs and outputs
-    utils.create_demo_file(mod, indefinite=False, 
-                           no_of_inputs = no_of_inputs,
-                           directory=diana_dir)
+    d_diana = DianaDriver(mod, params, build_dir=build_dir,
+                          byoc_path=byoc_path, no_of_inputs=no_of_inputs)
+    d_diana.compile(gcc_opt=3, fusion=True)
     # Make for DIANA
-    utils.make("pulp", make_dir=diana_dir)
     if run:
         # Run the binary on DIANA
-        output_pulp = utils.gdb("pulp", directory=diana_dir)
+        output_pulp = d_diana.run()
         # Compile and run the network on x86
         d_x86 = X86Driver(mod, params, build_dir, byoc_path, no_of_inputs)
         d_x86.compile(gcc_opt=0, fusion=False)

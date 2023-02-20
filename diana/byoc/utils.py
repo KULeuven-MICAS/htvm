@@ -263,11 +263,6 @@ def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
         This can be useful when debuggin the TVM-generated c code kernels.
     :param build_path: path to export mlf file output to
     '''
-    #FIXME remove me after uniformisation
-    if device == "pulp":
-        create_build_dir(byoc_path = byoc_path,
-                         build_path = build_path,
-                         device = "pulp")
     # Compile new model
     mlf_path = build_path / "model.tar"
     tvmc_wrapper(model, target, fuse_layers, mlf_path)
