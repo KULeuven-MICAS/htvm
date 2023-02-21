@@ -44,7 +44,7 @@ class Driver(ABC):
     def run(self):
         raise NotImplementedError()
 
-    def profile(self):
+    def process_profile(self):
         raise NotImplementedError()
 
 
@@ -94,6 +94,8 @@ class DianaDriver(Driver):
         # TODO: move -requant_transform somewhere else?
         self.target="soma_dory -requant_transform=0, c"
         self.init_value = 1
+        # Placeholder in case profiling code is added
+        self.kernels = None
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
 
     def tvm_compile(self, fusion: bool = True):
@@ -101,6 +103,7 @@ class DianaDriver(Driver):
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
                                       build_path=self.build_dir)
+        shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
         utils.create_demo_file(self.model.mod, init_value=self.init_value,
                                no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
@@ -108,6 +111,34 @@ class DianaDriver(Driver):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
 
+    def add_profiler(self):
+        self.kernels = profiler.insert_profiler(
+                codegen_dir = self.build_dir/"codegen/host/src/",
+                gdb_script_name = self.build_dir/"./gdb_demo.sh",
+                csv_file = self.build_dir/"profile.csv",
+                gdb_log_name = self.build_dir/"profile.txt",
+                interactive = False,
+                measurement = "individual")
+        _ = profiler.insert_profiler(
+                codegen_dir = self.build_dir/"/codegen/host/src/",
+                gdb_script_name = self.build_dir/"gdb_demo.sh",
+                csv_file = self.build_dir/"memory.csv",
+                gdb_log_name= self.build_dir/"memory.txt",
+                interactive = False,
+                measurement = "memory")
+
+    def process_profile(self):
+        cycles = profiler.process_profiler(
+                            measurement="individual", 
+                            kernels=self.kernels,
+                            log_file=self.build_dir/"profile.txt",
+                            csv_file=self.build_dir/"profile.csv",
+                            macs_report = self.build_dir/"macs_report.txt")
+        heap_usage = profiler.process_profiler(
+                            measurement="memory", 
+                            kernels=None,
+                            log_file=self.build_dir/"memory.txt",
+                            csv_file=self.build_dir/"memory.csv")
     def run(self):
         result = utils.gdb(device=self.device, 
                            binary="pulpissimo/demo/demo",
@@ -134,11 +165,13 @@ def driver(mod: tvm.ir.IRModule,
     d_diana = DianaDriver(mod, params, build_dir=build_dir,
                           byoc_path=byoc_path, no_of_inputs=no_of_inputs)
     d_diana.tvm_compile(fusion=True)
+    d_diana.add_profiler()
     d_diana.gcc_compile(gcc_opt=3)
     # Make for DIANA
     if run:
         # Run the binary on DIANA
         output_pulp = d_diana.run()
+        d_diana.process_profile()
         # Compile and run the network on x86
         d_x86 = X86Driver(mod, params, build_dir, byoc_path, no_of_inputs)
         d_x86.tvm_compile(fusion=False)

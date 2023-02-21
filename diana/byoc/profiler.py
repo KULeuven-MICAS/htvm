@@ -184,7 +184,11 @@ class DianaResult():
             if self._is_dory_kernel(name):
                 macs = self.macs[name][0]
                 wmem = self.macs[name][1]
-                print(f"     {f'MACs: {macs}, WMEM: {wmem}':<{offset}}         @ {float(macs)/cycles:,.3f} MACs/c")
+                if cycles == 0:
+                    print(f"     {f'MACs: {macs}, WMEM: {wmem}':<{offset}}         @ !!! 0 cycles !!!")
+                    continue
+                else:
+                    print(f"     {f'MACs: {macs}, WMEM: {wmem}':<{offset}}         @ {float(macs)/cycles:,.3f} MACs/c")
 
     def write_csv(self, file_name="results.csv"):
         """
@@ -409,13 +413,13 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
     if measurement == "memory":
         # At the end of the gdb script add extra prints
         with open(gdb_script_name, "a") as gdb_script:
-            gdb_script.write(generate_gdb_script(None, "memory.txt",
+            gdb_script.write(generate_gdb_script(None, gdb_log_name,
                              measurement = measurement))
         return
     if measurement is None or measurement == "power":
         return
-    lib1_file_name = codegen_dir + "default_lib1.c"
-    lib0_file_name = codegen_dir + "default_lib0.c"
+    lib1_file_name = codegen_dir / "default_lib1.c"
+    lib0_file_name = codegen_dir / "default_lib0.c"
     # Providing empty kernels, kernel_counters for global measurement
     kernel_counters = None
     kernels = None
@@ -436,10 +440,10 @@ def insert_profiler(codegen_dir="./build/codegen/host/src/",
 
 
 def process_profiler(measurement, kernels, log_file="profile.txt", 
-                     csv_file="profile.csv"):
+                     csv_file="profile.csv", macs_report=None):
     log_results = parse_gdb_log(log_file)
     if measurement == "individual" or measurement == "no_dma":
-        result = DianaResult(kernels, log_results, "/tmp/macs_report.txt")
+        result = DianaResult(kernels, log_results, macs_report)
         # Remove macs_report.txt after parsing to clear next measurement
         pathlib.Path("/tmp/macs_report.txt").unlink(missing_ok=True)
         print("\n-----  RESULTS ------")
