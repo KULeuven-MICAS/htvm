@@ -30,17 +30,21 @@ class Driver(ABC):
         self.no_of_inputs = no_of_inputs
 
     @abstractmethod
-    def compile(gcc_opt: int = 3, fusion: bool = False):
-        raise NotImplementedError()
-
-    def add_profiler():
+    def tvm_compile(self, fusion: bool = False):
         raise NotImplementedError()
 
     @abstractmethod
-    def run():
+    def gcc_compile(self, gcc_opt: int = 3):
         raise NotImplementedError()
 
-    def profile():
+    def add_profiler(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def run(self):
+        raise NotImplementedError()
+
+    def profile(self):
         raise NotImplementedError()
 
 
@@ -58,7 +62,7 @@ class X86Driver(Driver):
         self.init_value = 1
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
 
-    def compile(self, gcc_opt: int = 0, fusion: bool = False):
+    def tvm_compile(self, fusion: bool = False):
         utils.tvmc_compile_and_unpack(self.model, target=self.target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
@@ -66,6 +70,8 @@ class X86Driver(Driver):
         utils.create_demo_file(self.model.mod, init_value=self.init_value,
                                no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
+
+    def gcc_compile(self, gcc_opt: int = 0):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.x86", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
 
@@ -90,7 +96,7 @@ class DianaDriver(Driver):
         self.init_value = 1
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
 
-    def compile(self, gcc_opt: int = 3, fusion: bool = True):
+    def tvm_compile(self, fusion: bool = True):
         utils.tvmc_compile_and_unpack(self.model, target=self.target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
@@ -98,6 +104,7 @@ class DianaDriver(Driver):
         utils.create_demo_file(self.model.mod, init_value=self.init_value,
                                no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
+    def gcc_compile(self, gcc_opt: int = 3):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
 
@@ -111,8 +118,7 @@ class DianaDriver(Driver):
 
 def driver(mod: tvm.ir.IRModule, 
            params: Dict[str, tvm.nd.array],
-           run: bool = False,
-           build_dir: pathlib.Path = "build",
+           run: bool = False, build_dir: pathlib.Path = "build",
            byoc_path: pathlib.Path = ".",
            no_of_inputs: int = 1):
     """
@@ -127,14 +133,16 @@ def driver(mod: tvm.ir.IRModule,
     # Create the model library format file and unpack
     d_diana = DianaDriver(mod, params, build_dir=build_dir,
                           byoc_path=byoc_path, no_of_inputs=no_of_inputs)
-    d_diana.compile(gcc_opt=3, fusion=True)
+    d_diana.tvm_compile(fusion=True)
+    d_diana.gcc_compile(gcc_opt=3)
     # Make for DIANA
     if run:
         # Run the binary on DIANA
         output_pulp = d_diana.run()
         # Compile and run the network on x86
         d_x86 = X86Driver(mod, params, build_dir, byoc_path, no_of_inputs)
-        d_x86.compile(gcc_opt=0, fusion=False)
+        d_x86.tvm_compile(fusion=False)
+        d_x86.gcc_compile(gcc_opt=0)
         output_x86 = d_x86.run()
         # Compare X86 and DIANA outputs
         # Use allclose, not allequal (in case of floats)
