@@ -4,7 +4,6 @@ from utils import (
         relay_soma_conv2d,
         relay_soma_dense,
         create_demo_file,
-        parse_cli_options,
         create_random_array
         )
 from profiler import insert_profiler
@@ -406,26 +405,3 @@ def create_model(weight_bits, add_layout_transforms, mixed):
     mod = mod.from_expr(x)
 
     return mod, params
-
-
-if __name__ == "__main__":
-    # for reproducability
-    np.random.seed(0)
-    # Get options from cli
-    args, opt_string = parse_cli_options()
-
-    add_layout_transforms = False
-    if '-layout_transform=0' in args.target:
-        add_layout_transforms = True
-
-    # create the model
-    mod, params = create_model(args.weight_bits, add_layout_transforms)
-    model = TVMCModel(mod, params)
-
-    # compile the model
-    tvmc_compile_and_unpack(model, target=args.target, fuse_layers=args.fusion)
-    create_demo_file(mod, path='../src/demo.c')
-    basename_this_file = os.path.splitext(os.path.basename(__file__))[0]
-    insert_profiler(measurement=args.measurement,
-                    interactive=args.interactive,
-                    csv_file=f"{basename_this_file}_{opt_string}.csv")

@@ -290,3 +290,54 @@ def driver(mod: tvm.ir.IRModule,
         # Compare X86 and DIANA outputs
         # Use allclose, not allequal (in case of floats)
         assert np.ma.allclose(output_x86,output_pulp)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="HTVM Command Line Driver")
+    parser.add_argument('--target', dest='target',
+                        help="Target string to pass onto TVMC, note that " + \
+                             "'-device=arm_cpu' is appended to the string later",
+                        default="soma_dory, c")
+    parser.add_argument('--device', dest='device',
+                        choices = ("pulp", "x86"),
+                        help="Device to make binary for (default 'pulp')",
+                        default="pulp")
+    parser.add_argument('--profile', dest='measurement',
+                        help="Insert PULP performance counters into "+\
+                             "generated C code; for each individual kernel,"+\
+                             "for the entire TVM artefact, or " +\
+                             "don't insert performance counters (default)",
+                        choices=("individual", "global", None),
+                        default=None)
+    parser.add_argument('--no-fusion', dest='fusion',
+                        help="Set TVM's Relay Fusion pass' "+\
+                             "maximum fusion depth to 0",
+                        action='store_const', const=False,
+                        default=True)
+    parser.add_argument('--gcc-opt', dest='gcc_opt',
+                        choices = (0, 1, 2, 3), type=int,
+                        help="Set the gcc optimization level",
+                        default=3)
+    args = parser.parse_args()
+    # Some options shouldn't be used together
+    if args.device == "x86":
+        if "soma_dory" in args.target:
+            raise ValueError("Dory codegen can not be compiled for "+ \
+                             "--device=\"x86\", only for --device=\"pulp\"")
+        if args.measurement is not None:
+            raise ValueError("Profiling is not available for "+\
+                             "--device=\"x86\", only for --device=\"pulp\"")
+    # Return string which identifies options
+    def get_options_string(args: argparse.Namespace):
+        fusion_name = "fused" if args.fusion else "unfused"
+        target_name = "dory" if args.target == "soma_dory, c" else "c"
+        options_string = f"{args.device}_{target_name}_{fusion_name}" + \
+                   f"_O{args.gcc_opt}_{args.measurement}"
+        return options_string
+
+    import mlperf_tiny.relay_ds_cnn
+    ir_module, params = mlperf_tiny.relay_ds_cnn.create_model(
+            weight_bits = 8,
+            add_layout_transforms = True,
+            mixed = False)
+    driver(ir_module, params, run, f"tmp/{options_string}")

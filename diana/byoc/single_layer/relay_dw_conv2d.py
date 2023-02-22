@@ -43,24 +43,3 @@ def create_model(weight_bits: int,
     mod = mod.from_expr(x)
 
     return mod, params
-
-
-if __name__ == "__main__":
-    # for reproducability
-    np.random.seed(0)
-    # Get options from cli
-    args, opt_string = utils.parse_cli_options()
-    # create the model
-    mod, params = create_model(args.weight_bits)
-    model = TVMCModel(mod, params)
-    # compile the model
-    utils.tvmc_compile_and_unpack(model, target=args.target, 
-                                  fuse_layers=args.fusion)
-    indefinite = True if args.measurement == "power" else False
-    utils.create_demo_file(mod, indefinite=indefinite)
-    insert_profiler(measurement=args.measurement,
-                    interactive=args.interactive,
-                    csv_file="relay_dw_conv2d_"+opt_string+".csv")
-    if not args.interactive:
-        utils.make(args.device)
-        utils.gdb(args.device)
