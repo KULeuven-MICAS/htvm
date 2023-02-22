@@ -157,6 +157,7 @@ class DianaDriver(Driver):
                  params: Dict[str, tvm.nd.array],
                  build_dir: pathlib.Path = "build",
                  byoc_path: pathlib.Path = ".",
+                 dory_path: pathlib.Path = "/dory",
                  no_of_inputs: int = 1):
         super(DianaDriver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
         self.device = "pulp"
@@ -168,6 +169,7 @@ class DianaDriver(Driver):
         self.kernels = None
         self.measurement = None
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
+        utils.copy_dory_files(dory_path, self.build_dir)
 
     def tvm_compile(self, 
                     fusion: bool = True,

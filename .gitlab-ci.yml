@@ -64,7 +64,6 @@ pytest_e2e:
       - export PYTHONPATH=$PYTHONPATH:`pwd`/python
       - cd diana/byoc
       - echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
-      - bash copy_dory_files.sh
       - pytest -v test.py --junitxml=test_e2e_report.xml
     artifacts:
        when: always

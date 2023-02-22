@@ -293,11 +293,8 @@ def create_build_dir(byoc_path: str = ".",
     # Copy over other necessary files
     if device == "pulp":
         makefile_pulprt = pathlib.Path("Makefile.pulprt")
-        dory_dir = pathlib.Path("dory")
         shutil.copyfile(src=byoc_path / makefile_pulprt, 
                         dst=build_path / makefile_pulprt)
-        shutil.copytree(src=byoc_path / dory_dir, 
-                        dst=build_path / dory_dir)
     elif device == "x86":
         makefile_x86 = pathlib.Path("Makefile.x86")
         shutil.copyfile(src=byoc_path / makefile_x86, 
@@ -311,6 +308,43 @@ def create_build_dir(byoc_path: str = ".",
                     dst=build_path / src_dir, dirs_exist_ok=True)
     shutil.copytree(src=byoc_path / include_dir, 
                     dst=build_path / include_dir, dirs_exist_ok=True)
+
+
+def copy_dory_files(dory_path: str = "/dory",
+                    build_path: str = "./build"):
+    """
+    Function that copies dory library files on dory_path to a build_path
+    """
+    dory_hal_dir = pathlib.Path(dory_path) / "dory/Hardware_targets/"\
+            / "Diana/Backend_Kernels/dory-hal"
+    dory_utils_dir = pathlib.Path(dory_path) / "dory/Hardware_targets/"\
+            / "Diana/Diana_TVM/Utils_files"
+    dory_src_dir = pathlib.Path(build_path) / "dory/src"
+    dory_src_dir.mkdir(parents=True)
+    dory_inc_dir = pathlib.Path(build_path) / "dory/include"
+    dory_inc_dir.mkdir(parents=True)
+    hal_src_files= ["digital_conv_2d.c",
+                   "analog_conv_2d.c",
+                   "digital_element_wise_sum.c",
+                   "digital_depthwise_conv_2d.c",
+                   "digital_fully_connected.c",
+                   "encoders_instruction_memory.c",
+                   "utils.c"]
+    hal_include_files = ["kernels.h", 
+                         "encoders_instruction_memory.h",
+                         "utils.h"]
+    utils_src_files = ["dory.c",
+                       "mem_controller.c",]
+    utils_include_files = ["dory.h",
+                           "mem_controller.h"]
+    for src in hal_src_files:
+        shutil.copyfile(dory_hal_dir/"src"/src, dory_src_dir/src)
+    for inc in hal_include_files:
+        shutil.copyfile(dory_hal_dir/"include"/inc, dory_inc_dir/inc)
+    for src in utils_src_files:
+        shutil.copyfile(dory_utils_dir/src, dory_src_dir/src)
+    for inc in utils_include_files:
+        shutil.copyfile(dory_utils_dir/inc, dory_inc_dir/inc)
     
 
 def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build", 
