@@ -56,6 +56,7 @@ class Driver(ABC):
 
     @abstractmethod
     def tvm_compile(self, 
+                    target: str = "c",
                     fusion: bool = False,
                     init_value: int = 1):
         """Compiles network to C code with TVM
@@ -64,6 +65,7 @@ class Driver(ABC):
         network and C code that calls the network.
         All output is stored in self.build_dir
 
+        :param target: target parameter passed to TVMC
         :param fusion: Enable/Disable operator fusion pass for TVM generated
             kernels
         :param init_value: input value set in calling wrapper
@@ -129,11 +131,14 @@ class X86Driver(Driver):
         super(X86Driver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
         self.device = "x86"
         self.build_dir = self.build_dir / self.device
-        self.target = "c"
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
 
-    def tvm_compile(self, fusion: bool = False, init_value: int = 1):
-        utils.tvmc_compile_and_unpack(self.model, target=self.target,
+    def tvm_compile(self, 
+                    target: str ="c",
+                    fusion: bool = False, 
+                    init_value: int = 1):
+        utils.tvmc_compile_and_unpack(self.model,
+                                      target=target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
                                       build_path=self.build_dir)
@@ -162,9 +167,6 @@ class DianaDriver(Driver):
         super(DianaDriver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
         self.device = "pulp"
         self.build_dir = self.build_dir / self.device
-        # TODO: move -requant_transform somewhere else?
-        self.target="soma_dory -requant_transform=0, c"
-        self.init_value = 1
         # Placeholders in case profiling code is added
         self.kernels = None
         self.measurement = None
@@ -172,6 +174,7 @@ class DianaDriver(Driver):
         utils.copy_dory_files(dory_path, self.build_dir)
 
     def tvm_compile(self, 
+                    target: str = "soma_dory -requant_transform=0, c",
                     fusion: bool = True,
                     init_value: int = 1,
                     indefinite: bool = False,
@@ -183,6 +186,7 @@ class DianaDriver(Driver):
         network and C code that calls the network.
         All output is stored in self.build_dir
 
+        :param target: target parameter passed to TVMC
         :param fusion: Enable/Disable operator fusion pass for TVM generated
             kernels
         :param init_value: input value set in calling wrapper
@@ -191,7 +195,8 @@ class DianaDriver(Driver):
         :param boot_analog: put analog core boot code in C wrapper before
             calling TVM generated code.
         """
-        utils.tvmc_compile_and_unpack(self.model, target=self.target,
+        utils.tvmc_compile_and_unpack(self.model, 
+                                      target=target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
                                       build_path=self.build_dir)
@@ -199,7 +204,7 @@ class DianaDriver(Driver):
         # used for processing the output of individual profiling data
         shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
         utils.create_demo_file(self.model.mod, 
-                               init_value=self.init_value,
+                               init_value=init_value,
                                no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
     def gcc_compile(self, gcc_opt: int = 3):
