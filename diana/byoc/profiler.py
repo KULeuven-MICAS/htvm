@@ -269,14 +269,12 @@ def adapt_lib0(file_name):
         regex = r"(int32_t tvmgen_default_run\(struct " + \
                 r"tvmgen_default_inputs\* inputs,struct " + \
                 r"tvmgen_default_outputs\* " + \
-                r"outputs\) \{)(.*;\n)(})"
-        function = r"int status = tvmgen_default___tvm_main__(" + \
-                   "inputs->input,outputs->output);\n"
+                r"outputs\) \{)return (.*;\n)(})"
         status = "return status;\n"
         # whitespace
         ws= "    "
         subst = decl + "\n" + r"\1\n" + ws + setup + ws + before + ws + \
-                function + ws + after + ws + status + r"\3" 
+                r"int status = \2\n" + ws + after + ws + status + r"\3" 
         replaced = re.sub(regex, subst, replaced, count=0, flags=re.MULTILINE)
         lib0.seek(0)
         lib0.write(replaced)
