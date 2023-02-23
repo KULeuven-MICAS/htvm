@@ -314,13 +314,6 @@ if __name__ == "__main__":
                         choices = ("pulp", "x86"),
                         help="Device to make binary for (default 'pulp')",
                         default="pulp")
-    parser.add_argument('--profile', dest='measurement',
-                        help="Insert PULP performance counters into "+\
-                             "generated C code; for each individual kernel,"+\
-                             "for the entire TVM artefact, or " +\
-                             "don't insert performance counters (default)",
-                        choices=("individual", "global", None),
-                        default=None)
     parser.add_argument('--no-fusion', dest='fusion',
                         help="Set TVM's Relay Fusion pass' "+\
                              "maximum fusion depth to 0",
@@ -340,12 +333,32 @@ if __name__ == "__main__":
     parser.add_argument('--byoc_path', dest='byoc_path', type=pathlib.Path,
                         help="Set path to BYOC folder",
                         default=pathlib.Path("/tvm-fork/diana/byoc"))
-    parser.add_argument('--dory_path', dest='dory_path', type=pathlib.Path,
-                        help="Set path to DORY folder",
-                        default=pathlib.Path("/dory"))
     parser.add_argument('--build_dir', dest='build_dir', type=pathlib.Path,
                         help="Set output build directory",
                         default=pathlib.Path("/tmp"))
+
+    # New group for PULP specific arguments
+    pulp_group = parser.add_argument_group("Diana/pulp-specific arguments")
+    pulp_group.add_argument('--dory_path', dest='dory_path', type=pathlib.Path,
+                        help="Set path to DORY folder",
+                        default=pathlib.Path("/dory"))
+    pulp_group.add_argument('--profile', dest='measurement',
+                        help="Insert PULP performance counters into "+\
+                             "generated C code; for each individual kernel,"+\
+                             "for the entire TVM artefact, or " +\
+                             "don't insert performance counters (default)",
+                        choices=("individual", "global", None),
+                        default=None)
+    pulp_group.add_argument('--boot_analog', dest='boot_analog',
+                        help="Insert analog core boot code",
+                        action='store_const', const=True,
+                        default=False)
+    pulp_group.add_argument('--indefinite', dest='indefinite',
+                        help="Insert infinite loop around TVM generated code",
+                        action='store_const', const=True,
+                        default=False)
+
+
     args = parser.parse_args()
 
     # Some options shouldn't be used together
@@ -372,12 +385,16 @@ if __name__ == "__main__":
                              args.byoc_path, 
                              args.dory_path, 
                              args.no_of_inputs)
+        driver.tvm_compile(target=args.target,
+                           fusion=args.fusion,
+                           indefinite=args.indefinite,
+                           boot_analog=args.boot_analog)
     elif args.device == "x86":
         driver = X86Driver(ir_module, params, 
                            args.build_dir / get_options_string(args), 
                            args.byoc_path,
                            args.no_of_inputs)
-    driver.tvm_compile(target=args.target,fusion=args.fusion)
+        driver.tvm_compile(target=args.target,fusion=args.fusion)
     if args.measurement is not None:
         driver.add_profiler(measurement=args.measurement)
     driver.gcc_compile(gcc_opt=args.gcc_opt)
