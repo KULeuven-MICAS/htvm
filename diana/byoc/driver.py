@@ -203,7 +203,8 @@ class DianaDriver(Driver):
                                       build_path=self.build_dir)
         # This temporary file is generated in the previous function and is
         # used for processing the output of individual profiling data
-        shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
+        if "soma_dory" in target:
+            shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
         utils.create_demo_file(self.model.mod, 
                                init_value=init_value,
                                no_of_inputs=self.no_of_inputs,
@@ -296,12 +297,19 @@ def driver(mod: tvm.ir.IRModule,
         assert np.ma.allclose(output_x86,output_pulp)
 
 
+
 if __name__ == "__main__":
+    ir_module, params = mlperf_tiny.relay_dae.create_model(
+            weight_bits = 8,
+            add_layout_transforms = True,
+            mixed = False)
     parser = argparse.ArgumentParser(description="HTVM Command Line Driver")
     parser.add_argument('--target', dest='target',
                         help="Target string to pass onto TVMC, note that " + \
-                             "'-device=arm_cpu' is appended to the string later",
-                        default="soma_dory, c")
+                             "'-device=arm_cpu' is appended to the string " +\
+                             "later",
+                        default="soma_dory -layout_transform=0 "+\
+                                "-requant_transform=0, c")
     parser.add_argument('--device', dest='device',
                         choices = ("pulp", "x86"),
                         help="Device to make binary for (default 'pulp')",
@@ -312,47 +320,68 @@ if __name__ == "__main__":
                              "for the entire TVM artefact, or " +\
                              "don't insert performance counters (default)",
                         choices=("individual", "global", None),
-                        default="global")
+                        default=None)
     parser.add_argument('--no-fusion', dest='fusion',
                         help="Set TVM's Relay Fusion pass' "+\
                              "maximum fusion depth to 0",
+                        action='store_const', const=False,
+                        default=True)
+    parser.add_argument('--no-run', dest='run',
+                        help="Do not run the binary after compilation",
                         action='store_const', const=False,
                         default=True)
     parser.add_argument('--gcc-opt', dest='gcc_opt',
                         choices = (0, 1, 2, 3), type=int,
                         help="Set the gcc optimization level",
                         default=3)
+    parser.add_argument('--inputs', dest='no_of_inputs', type=int,
+                        help="Set number of TVM model inputs",
+                        default=1)
+    parser.add_argument('--byoc_path', dest='byoc_path', type=pathlib.Path,
+                        help="Set path to BYOC folder",
+                        default=pathlib.Path("/tvm-fork/diana/byoc"))
+    parser.add_argument('--dory_path', dest='dory_path', type=pathlib.Path,
+                        help="Set path to DORY folder",
+                        default=pathlib.Path("/dory"))
+    parser.add_argument('--build_dir', dest='build_dir', type=pathlib.Path,
+                        help="Set output build directory",
+                        default=pathlib.Path("/tmp"))
     args = parser.parse_args()
+
     # Some options shouldn't be used together
-    if args.device == "x86":
-        raise NotImplementedError()
+    if args.device=="x86":
         if "soma_dory" in args.target:
             raise ValueError("Dory codegen can not be compiled for "+ \
                              "--device=\"x86\", only for --device=\"pulp\"")
         if args.measurement is not None:
             raise ValueError("Profiling is not available for "+\
                              "--device=\"x86\", only for --device=\"pulp\"")
+
     # Return string which identifies options
     def get_options_string(args: argparse.Namespace):
         fusion_name = "fused" if args.fusion else "unfused"
-        target_name = "dory" if args.target == "soma_dory, c" else "c"
+        target_name = "dory" if "soma_dory" in args.target else "c"
         options_string = f"{args.device}_{target_name}_{fusion_name}" + \
                    f"_O{args.gcc_opt}_{args.measurement}"
         return options_string
-    import mlperf_tiny.relay_ds_cnn
-    ir_module, params = mlperf_tiny.relay_ds_cnn.create_model(
-            weight_bits = 8,
-            add_layout_transforms = True,
-            mixed = False)
-    build_dir=pathlib.Path(f"/tmp/{get_options_string(args)}")
-    byoc_path=pathlib.Path("/tvm-fork/diana/byoc")
-    d_diana = DianaDriver(ir_module, params, 
-                          build_dir=build_dir,
-                          byoc_path=byoc_path)
-    # overriding target for now
-    args.target = "soma_dory -layout_transform=0 -requant_transform=0, c"
-    d_diana.tvm_compile(target=args.target,fusion=args.fusion)
-    d_diana.add_profiler(measurement=args.measurement)
-    d_diana.gcc_compile(gcc_opt=args.gcc_opt)
-    output_pulp = d_diana.run()
-    d_diana.process_profile()
+
+    # Drive compilation
+    if args.device == "pulp":
+        driver = DianaDriver(ir_module, params, 
+                             args.build_dir / get_options_string(args), 
+                             args.byoc_path, 
+                             args.dory_path, 
+                             args.no_of_inputs)
+    elif args.device == "x86":
+        driver = X86Driver(ir_module, params, 
+                           args.build_dir / get_options_string(args), 
+                           args.byoc_path,
+                           args.no_of_inputs)
+    driver.tvm_compile(target=args.target,fusion=args.fusion)
+    if args.measurement is not None:
+        driver.add_profiler(measurement=args.measurement)
+    driver.gcc_compile(gcc_opt=args.gcc_opt)
+    if args.run:
+        output_pulp = driver.run()
+        if args.measurement is not None:
+            driver.process_profile()
