@@ -8,6 +8,7 @@ import profiler
 import subprocess
 import pathlib
 import shutil
+import argparse
 
 import mlperf_tiny.relay_ds_cnn
 import mlperf_tiny.relay_mobilenet
@@ -233,7 +234,7 @@ class DianaDriver(Driver):
                 csv_file = self.build_dir/"profile.csv",
                 gdb_log_name = self.build_dir/"profile.txt",
                 interactive = False,
-                measurement = "measurement")
+                measurement = measurement)
         _ = profiler.insert_profiler(
                 codegen_dir = self.build_dir/"/codegen/host/src/",
                 gdb_script_name = self.build_dir/"gdb_demo.sh",
@@ -274,8 +275,6 @@ def driver(mod: tvm.ir.IRModule,
     on a remote GDB instance over port 3333.
     Afterwards an x86 compiled model is used to compare outputs
     """
-    # Create a TVMCModel
-    model = TVMCModel(mod, params)
     # Create the model library format file and unpack
     d_diana = DianaDriver(mod, params, build_dir=build_dir,
                           byoc_path=byoc_path, no_of_inputs=no_of_inputs)
@@ -313,7 +312,7 @@ if __name__ == "__main__":
                              "for the entire TVM artefact, or " +\
                              "don't insert performance counters (default)",
                         choices=("individual", "global", None),
-                        default=None)
+                        default="global")
     parser.add_argument('--no-fusion', dest='fusion',
                         help="Set TVM's Relay Fusion pass' "+\
                              "maximum fusion depth to 0",
@@ -326,6 +325,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # Some options shouldn't be used together
     if args.device == "x86":
+        raise NotImplementedError()
         if "soma_dory" in args.target:
             raise ValueError("Dory codegen can not be compiled for "+ \
                              "--device=\"x86\", only for --device=\"pulp\"")
@@ -339,10 +339,20 @@ if __name__ == "__main__":
         options_string = f"{args.device}_{target_name}_{fusion_name}" + \
                    f"_O{args.gcc_opt}_{args.measurement}"
         return options_string
-
     import mlperf_tiny.relay_ds_cnn
     ir_module, params = mlperf_tiny.relay_ds_cnn.create_model(
             weight_bits = 8,
             add_layout_transforms = True,
             mixed = False)
-    driver(ir_module, params, run, f"tmp/{options_string}")
+    build_dir=pathlib.Path(f"/tmp/{get_options_string(args)}")
+    byoc_path=pathlib.Path("/tvm-fork/diana/byoc")
+    d_diana = DianaDriver(ir_module, params, 
+                          build_dir=build_dir,
+                          byoc_path=byoc_path)
+    # overriding target for now
+    args.target = "soma_dory -layout_transform=0 -requant_transform=0, c"
+    d_diana.tvm_compile(target=args.target,fusion=args.fusion)
+    d_diana.add_profiler(measurement=args.measurement)
+    d_diana.gcc_compile(gcc_opt=args.gcc_opt)
+    output_pulp = d_diana.run()
+    d_diana.process_profile()

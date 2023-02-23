@@ -283,13 +283,14 @@ def create_build_dir(byoc_path: str = ".",
     byoc_path = pathlib.Path(byoc_path)
     # check if build folder exists
     if build_path.is_dir():
+        breakpoint()
         # remove build folder and all contents
         shutil.rmtree(build_path)
         # make the build folder again
-        build_path.mkdir()
+        build_path.mkdir(parents=True)
     if not build_path.is_dir():
         # If no build folder exists create one
-        build_path.mkdir()
+        build_path.mkdir(parents=True)
     # Copy over other necessary files
     if device == "pulp":
         makefile_pulprt = pathlib.Path("Makefile.pulprt")
