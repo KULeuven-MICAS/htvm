@@ -299,10 +299,6 @@ def driver(mod: tvm.ir.IRModule,
 
 
 if __name__ == "__main__":
-    ir_module, params = mlperf_tiny.relay_dae.create_model(
-            weight_bits = 8,
-            add_layout_transforms = True,
-            mixed = False)
     parser = argparse.ArgumentParser(description="HTVM Command Line Driver")
     parser.add_argument('--target', dest='target',
                         help="Target string to pass onto TVMC, note that " + \
@@ -358,8 +354,52 @@ if __name__ == "__main__":
                         action='store_const', const=True,
                         default=False)
 
-
+    # New group for rerunning specific experiments
+    exp_group = parser.add_argument_group("Run HTVM MLPerf Tiny experiments"+\
+                                    " (NOTE: This overrides some arguments)")
+    exp_group.add_argument('--net', dest='network', type=str,
+                           choices = ("ds_cnn", "mobilenet", "resnet","dae"), 
+                           help="Choose which MLPerf Tiny(TM) network to run",
+                           default=None)
+    exp_group.add_argument('--conf', dest='configuration', type=str,
+                           choices = ("cpu", "digital", "analog", "mixed"), 
+                           help="Choose configuration for the network to run",
+                           default="digital")
     args = parser.parse_args()
+
+    # Running with --net overrides some options
+    if args.network is not None:
+        # Defaults
+        args.device = "pulp"
+        args.target = "soma_dory layout_transform=0 -requant_transform=0, c"
+        args.measurement = "global"
+        args.fusion = True
+        args.gcc_opt = 3
+        weight_bits = 8
+        args.boot_analog = False
+        mixed = False
+        add_layout_transforms = True
+        # overriding defaults
+        if args.configuration == "cpu":
+            args.target = "c"
+        if args.configuration == "analog":
+            args.boot_analog = True
+            weight_bits = 2
+        if args.configuration == "mixed":
+            args.boot_analog = True
+            mixed = True
+        if args.network == "ds_cnn":
+            network_model = mlperf_tiny.relay_ds_cnn.create_model
+        elif args.network == "mobilenet":
+            network_model = mlperf_tiny.relay_mobilenet.create_model
+        elif args.network == "resnet":
+            network_model = mlperf_tiny.relay_resnet.create_model
+        elif args.network == "dae":
+            network_model = mlperf_tiny.relay_dae.create_model
+        ir_module, params = network_model(
+                weight_bits = weight_bits,
+                add_layout_transforms = add_layout_transforms,
+                mixed = mixed)
 
     # Some options shouldn't be used together
     if args.device=="x86":
@@ -376,7 +416,12 @@ if __name__ == "__main__":
         target_name = "dory" if "soma_dory" in args.target else "c"
         options_string = f"{args.device}_{target_name}_{fusion_name}" + \
                    f"_O{args.gcc_opt}_{args.measurement}"
-        return options_string
+        # in case a default experiment is chosen
+        if args.network is not None:
+            return args.network + "_" + options_string
+        # otherwise
+        else:
+            return options_string
 
     # Drive compilation
     if args.device == "pulp":

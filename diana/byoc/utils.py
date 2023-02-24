@@ -283,7 +283,6 @@ def create_build_dir(byoc_path: str = ".",
     byoc_path = pathlib.Path(byoc_path)
     # check if build folder exists
     if build_path.is_dir():
-        breakpoint()
         # remove build folder and all contents
         shutil.rmtree(build_path)
         # make the build folder again
