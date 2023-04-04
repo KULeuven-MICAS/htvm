@@ -392,6 +392,7 @@ if __name__ == "__main__":
         # overriding defaults
         if args.configuration == "cpu":
             args.target = "c"
+            add_layout_transforms = False
         if args.configuration == "analog":
             args.boot_analog = True
             weight_bits = 2
