@@ -208,7 +208,8 @@ class DianaDriver(Driver):
         utils.create_demo_file(self.model.mod, 
                                init_value=init_value,
                                no_of_inputs=self.no_of_inputs,
-                               directory=self.build_dir)
+                               directory=self.build_dir,
+                               boot_analog=boot_analog)
     def gcc_compile(self, gcc_opt: int = 3):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
