@@ -381,7 +381,7 @@ if __name__ == "__main__":
     if args.network is not None:
         # Defaults
         args.device = "pulp"
-        args.target = "soma_dory layout_transform=0 -requant_transform=0, c"
+        args.target = "soma_dory -layout_transform=0 -requant_transform=0, c"
         args.measurement = "global"
         args.fusion = True
         args.gcc_opt = 3
