@@ -456,7 +456,7 @@ def process_profiler(measurement, kernels, log_file="profile.txt",
         pathlib.Path("/tmp/macs_report.txt").unlink(missing_ok=True)
         # global measurement
         global_cycles = log_results[0]
-        clock_freq = 200e6
+        clock_freq = 260e6
         inference_time = float(global_cycles)/clock_freq
         inference_freq = 1/inference_time
         print("\n-----  GLOBAL RESULT ------")
