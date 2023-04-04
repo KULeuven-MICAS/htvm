@@ -675,7 +675,13 @@ def get_gdb_output(gdb_log_path="debug/gdb.txt"):
         # makes a list of numbers in string format
         list_numbers = string.split(",")
         # convert strings to integers
-        values = [float(number) for number in list_numbers]
+        values = []
+        for number in list_numbers:
+            # NaNs in gdb are displayed as "nan(0x234...)"
+            if "nan" in number:
+                values.append(float("nan"))
+            else:
+                values.append(float(number))
     values_from_test = np.array(values, dtype="float")
     # Values are returned from GDB in one big one-dimensional tensor
     # Reshaping here such that it matches the output
