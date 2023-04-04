@@ -430,6 +430,8 @@ if __name__ == "__main__":
         options_string = f"{args.device}_{target_name}_{fusion_name}" + \
                    f"_O{args.gcc_opt}_{args.measurement}"
         # in case a default experiment is chosen
+        if args.configuration is not None:
+            options_string = args.configuration + "_" + options_string
         if args.network is not None:
             return args.network + "_" + options_string
         # otherwise
