@@ -28,7 +28,8 @@ def create_model(weight_bits, add_layout_transforms, mixed):
     num_filters = 64
     #weights_shape = (num_filters, input_shape[1], 10, 4)
     # Use transpose for better performance
-    weights_shape = (num_filters, input_shape[1], 4, 10)
+    weights_shape = (num_filters, input_shape[1], 5, 7)
+    #weights_shape = (num_filters, input_shape[1], 4, 10)
     if mixed:
         weights = create_random_array(weights_shape, f'int8')
     else:
@@ -36,7 +37,7 @@ def create_model(weight_bits, add_layout_transforms, mixed):
     bias = create_random_array(weights_shape[0], 'int32')
     #x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(5, 1), act=True, shift_bits=4)
     # Use transpose for better performance
-    x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(1, 5), act=True, shift_bits=4)
+    x, params_conv1 = relay_soma_conv2d(x, 'conv1', weights, bias, strides=(2, 2), padding=(2, 3), act=True, shift_bits=4)
 
     ## Not necessary anymore if performed on the accelerator
     #if add_layout_transforms:
