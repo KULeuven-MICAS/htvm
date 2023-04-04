@@ -394,6 +394,8 @@ if __name__ == "__main__":
             args.target = "c"
             add_layout_transforms = False
         if args.configuration == "analog":
+            # Disable digital accelerator pattern matching
+            args.target = "soma_dory -layout_transform=0 -disable_digital_acc=1 -requant_transform=0, c"
             args.boot_analog = True
             weight_bits = 2
         if args.configuration == "mixed":
