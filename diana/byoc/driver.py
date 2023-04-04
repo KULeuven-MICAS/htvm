@@ -257,6 +257,15 @@ class DianaDriver(Driver):
                             kernels=None,
                             log_file=self.build_dir/"memory.txt",
                             csv_file=self.build_dir/"memory.csv")
+        size_dict = utils.size_pulp(binary=self.build_dir/
+                                    "pulpissimo/demo/demo")
+        print("\n")
+        print("----- L2 STATIC MEMORY USAGE ----")
+        for key, value in size_dict.items():
+            print(f"{key:10}: {value:8,} Bytes   " +\
+                    f"({round(float(value)/1000):4} kB)")
+        print("\n")
+
     def run(self):
         result = utils.gdb(device=self.device, 
                            binary="pulpissimo/demo/demo",
