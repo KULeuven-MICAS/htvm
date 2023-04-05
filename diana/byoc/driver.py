@@ -401,6 +401,7 @@ if __name__ == "__main__":
         if args.configuration == "mixed":
             args.boot_analog = True
             mixed = True
+            weight_bits = 2
         if args.network == "ds_cnn":
             network_model = mlperf_tiny.relay_ds_cnn.create_model
         elif args.network == "mobilenet":
