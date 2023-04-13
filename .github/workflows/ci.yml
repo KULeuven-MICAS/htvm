@@ -45,7 +45,7 @@ jobs:
   
   build-tvm-release:
     runs-on: self-hosted
-    container: ghcr.io/kuleuven-micas/htvm:latest
+    container: ghcr.io/${{ env.IMAGE_NAME }}
     needs: build-container
     steps:
       - name: Checkout repository
