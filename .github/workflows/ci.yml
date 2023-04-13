@@ -46,7 +46,7 @@ jobs:
   build-tvm-release:
     runs-on: self-hosted
     container:
-      image: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tags }}'
+      image: 'ghcr.io/kuleuven-micas/htvm:${{ steps.meta.outputs.tags }}'
     needs: build-container
     steps:
       - name: Checkout repository
