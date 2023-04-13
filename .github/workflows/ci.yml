@@ -12,7 +12,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-image:
+  build-container:
     runs-on: self-hosted
     container: docker:20.10.24-git
     permissions:
@@ -42,3 +42,26 @@ jobs:
           push: true
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
+  
+  build-tvm-release:
+    runs-on: self-hosted
+    container: ghcr.io/KULeuven-MICAS/htvm:latest
+    needs: build-container
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: True
+      - name: Build HTVM Release
+        run: |
+          mkdir build
+          cp diana/config.cmake build
+          cd build
+          cmake .. -G Ninja
+          ninja
+          cd ..
+      - name: Store HTVM Build
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          path: build
