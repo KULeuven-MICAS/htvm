@@ -45,7 +45,8 @@ jobs:
   
   build-tvm-release:
     runs-on: self-hosted
-    container: ghcr.io/${{ env.IMAGE_NAME }}
+    container:
+      image: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tags }}'
     needs: build-container
     steps:
       - name: Checkout repository
