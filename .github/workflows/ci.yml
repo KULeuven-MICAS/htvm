@@ -13,7 +13,7 @@ env:
 
 jobs:
   build-container:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     container: docker:20.10.24-git
     permissions:
       contents: read
@@ -44,7 +44,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
   
   build-htvm-release:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     container:
       image: 'ghcr.io/kuleuven-micas/htvm:main'
     needs: build-container
@@ -68,7 +68,7 @@ jobs:
           path: build
 
   test-htvm-unit:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     container:
       image: 'ghcr.io/kuleuven-micas/htvm:main'
     needs: build-htvm-release
@@ -89,7 +89,7 @@ jobs:
           pytest tests/python/contrib/test_soma_dory
 
   test-htvm-e2e:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     container:
       image: 'ghcr.io/kuleuven-micas/htvm:main'
     needs: build-htvm-release
