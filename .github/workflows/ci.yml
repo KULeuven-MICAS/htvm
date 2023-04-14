@@ -82,10 +82,10 @@ jobs:
         with:
           name: build
       - name: Run unit tests
-          run: |
-            export TVM_HOME=`pwd`
-            export PYTHONPATH=$PYTHONPATH:`pwd`/python
-            pytest tests/python/contrib/test_soma_dory
+        run: |
+          export TVM_HOME=`pwd`
+          export PYTHONPATH=$PYTHONPATH:`pwd`/python
+          pytest tests/python/contrib/test_soma_dory
 
   test-htvm-e2e:
     runs-on: self-hosted
@@ -102,9 +102,9 @@ jobs:
         with:
           name: build
       - name: Run end-to-end tests
-          run: |
-            export TVM_HOME=`pwd`
-            export PYTHONPATH=$PYTHONPATH:`pwd`/python
-            cd diana/byoc
-            echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
-            pytest -v test.py
+        run: |
+          export TVM_HOME=`pwd`
+          export PYTHONPATH=$PYTHONPATH:`pwd`/python
+          cd diana/byoc
+          echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
+          pytest -v test.py
