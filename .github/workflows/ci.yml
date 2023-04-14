@@ -58,8 +58,8 @@ jobs:
           mkdir build
           cp diana/config.cmake build
           cd build
-          cmake .. -G Ninja
-          ninja
+          cmake ..
+          make -j$(nproc)
           cd ..
       - name: Store HTVM Build
         uses: actions/upload-artifact@v3
