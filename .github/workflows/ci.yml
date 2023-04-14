@@ -43,7 +43,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
   
-  build-tvm-release:
+  build-htvm-release:
     runs-on: self-hosted
     container:
       image: 'ghcr.io/kuleuven-micas/htvm:main'
@@ -66,3 +66,45 @@ jobs:
         with:
           name: build
           path: build
+
+  test-htvm-unit:
+    runs-on: self-hosted
+    container:
+      image: 'ghcr.io/kuleuven-micas/htvm:main'
+    needs: build-htvm-release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: True
+      - name: Download previous HTVM build
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+      - name: Run unit tests
+          run: |
+            export TVM_HOME=`pwd`
+            export PYTHONPATH=$PYTHONPATH:`pwd`/python
+            pytest tests/python/contrib/test_soma_dory
+
+  test-htvm-e2e:
+    runs-on: self-hosted
+    container:
+      image: 'ghcr.io/kuleuven-micas/htvm:main'
+    needs: build-htvm-release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: True
+      - name: Download previous HTVM build
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+      - name: Run end-to-end tests
+          run: |
+            export TVM_HOME=`pwd`
+            export PYTHONPATH=$PYTHONPATH:`pwd`/python
+            cd diana/byoc
+            echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
+            pytest -v test.py
