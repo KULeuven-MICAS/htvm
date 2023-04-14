@@ -81,6 +81,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: build
+          path: build
       - name: Run unit tests
         run: |
           export TVM_HOME=`pwd`
@@ -101,6 +102,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: build
+          path: build
       - name: Run end-to-end tests
         run: |
           export TVM_HOME=`pwd`
