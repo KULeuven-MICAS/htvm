@@ -24,8 +24,7 @@ from functools import partial
 
 
 class DianaOnnxIntegerizeLinearOps(DFPatternCallback):
-    """For earch linear op, cast weights to int8, optional bias to int32 and insert cast ops before
-    and after the linear op.
+    """For earch linear op, cast weights to int8, set linear op output to int32 and cast optional bias to int32.
     """
     def __init__(self, require_type=False, rewrite_once=True):
         super().__init__(require_type, rewrite_once)
@@ -35,14 +34,15 @@ class DianaOnnxIntegerizeLinearOps(DFPatternCallback):
         self.b = is_constant()
 
         linear = is_op("nn.conv2d")(self.x, self.w) | is_op("nn.dense")(self.x, self.w)
-        self.pattern = linear.optional(lambda x: is_op("nn.bias_add")(x, self.b))
+        # NOTE: onnx parser of TVM produces 'add' rather than 'bias_add' for Gemm so we match on 'add' too
+        self.pattern = linear.optional(lambda x: is_op("nn.bias_add")(x, self.b) | is_op("add")(x, self.b))
 
     def callback(self, pre, post, node_map):
         call = pre
 
         # construct integerized bias call
         new_bias_add_call = None
-        if call.op.name == 'nn.bias_add':
+        if 'add' in call.op.name:
             call = call.args[0]
             b = node_map[self.b][0]
             b = relay.const(b.data.numpy().astype('int32'))
@@ -68,19 +68,63 @@ class DianaOnnxIntegerizeLinearOps(DFPatternCallback):
 
         # write new subgraph
         x = node_map[self.x][0]
-        x = relay.cast(x, 'int8')
         x = new_linear_call(x)
         if new_bias_add_call is not None:
             x = new_bias_add_call(x)
-        x = relay.cast(x, 'float')
 
         return x
 
 
+class DianaOnnxIntegerizeElementWiseSum(DFPatternCallback):
+    """For earch element-wise sum, add cast to int32 at both inputs.
+    """
+    def __init__(self, require_type=False, rewrite_once=True):
+        super().__init__(require_type, rewrite_once)
+
+        # NOTE: has_attr({}) is a trick to not match to constants to avoid matching to bias-add-like add ops
+        self.a = wildcard().has_attr({})
+        self.b = wildcard().has_attr({})
+
+        self.pattern = is_op("add")(self.a, self.b)
+
+    def callback(self, pre, post, node_map):
+        a = node_map[self.a][0]
+        b = node_map[self.b][0]
+
+        a = relay.op.cast(a, 'int32')
+        b = relay.op.cast(b, 'int32')
+        y = relay.op.add(a, b)
+
+        return y
+
+
+class DianaOnnxMergeDuplicateDiv(DFPatternCallback):
+    """Merge consecutive div ops with constants together (workaround for bug in quantlib)
+    """
+    def __init__(self, require_type=False, rewrite_once=True):
+        super().__init__(require_type, rewrite_once)
+
+        self.x = wildcard()
+        self.div1 = is_constant()
+        self.div2 = is_constant()
+
+        div1 = is_op("divide")(self.x, self.div1)
+        self.pattern = is_op("divide")(div1, self.div2)
+
+    def callback(self, pre, post, node_map):
+        x = node_map[self.x][0]
+        div1 = node_map[self.div1][0]
+        div2 = node_map[self.div2][0]
+
+        div = div1.data.numpy() * div2.data.numpy()
+        return relay.op.divide(x, relay.const(div))
+
+
 class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
     """Rewriter for digital requant pattern
-    Rewrite: cast -> div -> floor -> max -> min (-> cast)
-         to: right_shift -> clip -> cast
+    Rewrite: div -> floor -> max -> min
+         to: right_shift -> clip -> cast(int8)
+         or: div -> clip -> cast(int8)
     """
     def __init__(self, require_type=False):
         super().__init__(require_type)
@@ -90,12 +134,10 @@ class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
         self.maximum = is_constant()
         self.minimum = is_constant()
 
-        cast = is_op("cast")(self.x)
-        div = is_op("divide")(cast, self.div)
+        div = is_op("divide")(self.x, self.div)
         floor = is_op("floor")(div)
         maximum = is_op("maximum")(floor, self.maximum)
-        minimum = is_op("minimum")(maximum, self.minimum)
-        self.pattern = minimum.optional(lambda x: is_op("cast")(x))
+        self.pattern = is_op("minimum")(maximum, self.minimum)
 
     def callback(self, pre, post, node_map):
         x = node_map[self.x][0]
@@ -103,13 +145,18 @@ class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
         maximum = node_map[self.maximum][0]
         minimum = node_map[self.minimum][0]
 
-        shift_factor = np.log2(div.data.numpy()).astype('int32')
-        x = relay.op.right_shift(x, relay.const(shift_factor))
+        div_factor = div.data.numpy()
+        div_factor_log2 = np.log2(div_factor)
+
+        # check if division can be replaced by a right_shift
+        if div_factor_log2 == np.round(div_factor_log2) and div_factor_log2 >= 0:
+            shift_factor = div_factor_log2.astype('int32')
+            x = relay.op.right_shift(x, relay.const(shift_factor))
+        else:
+            x = relay.op.divide(x, relay.const(div_factor))
+
         x = relay.op.clip(x, a_min=int(maximum.data.numpy()), a_max=int(minimum.data.numpy()))
         x = relay.op.cast(x, 'int8')
-
-        if pre.op.name != 'cast':
-            x = relay.op.cast(x, 'float')
 
         return x
 
@@ -133,8 +180,7 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         self.maximum2 = is_constant()
         self.minimum2 = is_constant()
 
-        cast = is_op("cast")(self.x)
-        div1 = is_op("divide")(cast, self.div1)
+        div1 = is_op("divide")(self.x, self.div1)
         floor1 = is_op("floor")(div1)
         maximum1 = is_op("maximum")(floor1, self.maximum1)
         minimum1 = is_op("minimum")(maximum1, self.minimum1)
@@ -143,8 +189,7 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         div2 = is_op("divide")(add, self.div2)
         floor2 = is_op("floor")(div2)
         maximum2 = is_op("maximum")(floor2, self.maximum2)
-        minimum2 = is_op("minimum")(maximum2, self.minimum2)
-        self.pattern = minimum2.optional(lambda x: is_op("cast")(x))
+        self.pattern = is_op("minimum")(maximum2, self.minimum2)
 
     def callback(self, pre, post, node_map):
         x = node_map[self.x][0]
@@ -170,26 +215,50 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         x = relay.op.clip(x, a_min=int(maximum2.data.numpy()), a_max=int(minimum2.data.numpy()))
         x = relay.op.cast(x, 'int8')
 
-        if pre.op.name != 'cast':
-            x = relay.op.cast(x, 'float')
+        return x
+
+
+class DianaOnnxCorrectDequant(DFPatternCallback):
+    """Rewrite each dequant op from:
+            cast(int8) -> div
+        to:
+            cast(int8) -> cast(float) -> div
+        this is needed since the output of the dequant is assumed to be float
+    """
+    def __init__(self, require_type=False, rewrite_once=False):
+        super().__init__(require_type, rewrite_once)
+
+        self.x = wildcard()
+        self.div = is_constant()
+
+        cast = is_op("cast")(self.x).has_attr({'dtype': 'int8'})
+        self.pattern = is_op("divide")(cast, self.div)
+
+    def callback(self, pre, post, node_map):
+        x = node_map[self.x][0]
+        div = node_map[self.div][0]
+
+        x = relay.op.cast(x, 'int8')
+        x = relay.op.cast(x, 'float')
+        x = relay.op.divide(x, div)
 
         return x
 
 
 @tvm.ir.transform.module_pass(opt_level=0)
 class DianaOnnxIntegerize:
-    """ Transform relay graph for DIANA, parsed from ONNX, to efficient integer opterations
-        1) Cast weights and biases to integers and insert cast operations before and after linear ops
-        2) Rewrite digital requant operations
-        3) Rewrite analog requant + batchnorm operations
+    """ Transform relay graph for DIANA, parsed from quantlib ONNX, to integer operations.
     """
     def transform_module(
         self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
     ) -> tvm.ir.IRModule:
         for global_var, func in mod.functions.items():
             func = rewrite(DianaOnnxIntegerizeLinearOps(), func)
+            func = rewrite(DianaOnnxIntegerizeElementWiseSum(), func)
+            func = rewrite(DianaOnnxMergeDuplicateDiv(), func)
             func = rewrite(DianaOnnxAnalogBnRequantRewriter(), func)
             func = rewrite(DianaOnnxDigitalRequantRewriter(), func)
+            func = rewrite(DianaOnnxCorrectDequant(), func)
             mod.update_func(global_var, func)
         return mod
 

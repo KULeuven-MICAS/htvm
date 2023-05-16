@@ -31,7 +31,7 @@ from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 # don't remove this import even if it does not seem to be used
 # because this is the point where the soma_dory backend is registered
 import tvm.relay.backend.contrib.soma_dory
-from tvm.relay.backend.contrib.soma_dory.transform import SomaDoryLayoutTransform
+from tvm.relay.backend.contrib.soma_dory.layout_transform import SomaDoryLayoutTransform
 
 
 logger = logging.getLogger("SomaDory")
@@ -330,11 +330,13 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
 
     pipeline.append(tvm.transform.PrintIR())
     pipeline.append(transform.MergeComposite(pattern_table()))
-    pipeline.append(transform.AnnotateTarget(["soma_dory"]))
-
     if 'layout_transform' not in opts or opts['layout_transform'] != '0':
         pipeline.append(SomaDoryLayoutTransform())
 
+    pipeline.append(transform.AnnotateTarget(["soma_dory"]))
+    pipeline.append(tvm.transform.PrintIR())
+
+    pipeline.append(tvm.transform.PrintIR())
     pipeline.append(transform.InferType())
     pipeline.append(transform.PartitionGraph())
     pipeline.append(transform.InferType())
