@@ -2,6 +2,7 @@ numpy
 decorator
 attrs
 psutil
+networkx
 
 # pytest required for using `import tvm.relay as relay`
 pytest
@@ -12,4 +13,3 @@ plotly
 # for pulp-sdk
 prettytable
 pyelftools
-
