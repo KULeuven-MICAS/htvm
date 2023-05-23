@@ -16,8 +16,9 @@
 # under the License.
 """Data layout transformations for soma dory"""
 
-import numpy as np
 import tvm
+import numpy as np
+import networkx as nx
 from tvm import relay
 from tvm.relay import transform
 from tvm.relay.expr_functor import ExprMutator, ExprVisitor
@@ -34,181 +35,187 @@ def create_layout_transform(x, shape):
     return x
 
 
-def create_layout_transform_pattern(x=wildcard()):
-    """Return a search pattern for matching to a layout transform
-    """
-    x = is_op('reshape')(x)
-    x = is_op('reverse')(x)
-    x = is_op('reshape')(x)
-
-    return x
-
-
-def clone_sub_graph(start, end, target):
-    """Clone the subgraph between node 'start' and 'end' ontop of 'target'
+def calculate_transforms(g):
+    """Calculate where layout transforms need to be enabled in the networkx graph.
+    We start with a networkx graph with all layout transforms disabled (tfm = False)
     """
 
-    class CloneSubGraph(ExprVisitor):
+    def all_edges(g, node):
+        return list(g.in_edges(node)) + list(g.out_edges(node))
 
-        def __init__(self, start, target):
-            super().__init__()
-            self.clone = False
-            self.start = start
-            self.target = target
+    def toggle_tfms(g, edges):
+        for edge in edges:
+            g.edges[edge]['tfm'] = not g.edges[edge]['tfm']
 
-        def visit_call(self, call):
-            self.visit(call.op)
-            for a in call.args:
-                self.visit(a)
+    # enable transforms around 'acc' nodes
+    for node, data in g.nodes(data=True):
+        if data['layout'] == 'acc':
+            toggle_tfms(g, all_edges(g, node))
 
-            if self.clone:
-                if len(call.args) == 1:
-                    new_args = [self.target]
-                else:
-                    new_args = [self.target] + call.args[1:]
-                self.target = relay.Call(call.op, new_args, call.attrs, call.type_args, call.span)
+    # optimize transforms around 'x' nodes (don't care), this part is usefull for residual networks
+    for i in range(2):  # repeat twice to ensure all 'x' nodes are fully optimized
+        for node, data in g.nodes(data=True):
+            if data['layout'] != 'x':
+                continue
 
-            if call == self.start:
-                self.clone = True
+            edges = all_edges(g, node)
+            edge_tfms = [g.edges[edge]['tfm'] for edge in edges]
 
-    c = CloneSubGraph(start, target)
-    c.visit(end)
+            # check if we can reduce the amount of tfms
+            if sum(edge_tfms) > len(edges) // 2:
+                toggle_tfms(g, edges)
 
-    return c.target
+            # if all inputs contain a tfm, move them to the outputs
+            edge_in_tfms = [g.edges[edge]['tfm'] for edge in g.in_edges(node)]
+            if sum(edge_in_tfms) == len(edge_in_tfms):
+                toggle_tfms(g, edges)
 
 
-class SomaDoryInsertTransformsAroundFunctions(DFPatternCallback):
-    """Insert transforms before and after each soma_dory annotated function, except for soma_dory.add
+def is_op_layout_sensitive(call):
+    """Determine if the op in 'call' is sensitive to layout or not.
+    For multiple inputs, we assume that all inputs have the same layout.
+    Return True in case its sensitive to layout, return False otherwise
     """
-    def __init__(self, require_type=True, rewrite_once=True):
-        super().__init__(require_type, rewrite_once)
+    # ops that are not layout sensitive, regardless of their input
+    non_sensitive_ops = ['cast', 'clip', 'floor', 'nn.batch_flatten']
+    if call.op.name in non_sensitive_ops:
+        return False
 
-        # We match each composite function call and decide which call needs a transform in the callback,
-        # since we are not able to express this decision with pattern matching.
-        self.pattern = FunctionPattern(None, wildcard())(None)
+    # For element-wise ops with two inputs, sensitivity depends on their input type and shape.
+    # If at least one input is constant and its not a single value, we consider this op to be
+    # sensitive to layout, otherwise not.
+    conditional_non_sensitive_ops = ['add', 'multiply', 'divide', 'right_shift', 'concatenate']
+    if call.op.name in conditional_non_sensitive_ops:
+        for a in call.args:
+            if isinstance(a, relay.Constant) and a.data.numpy().size != 1:
+                return True
+        return False
 
-    def callback(self, pre, post, node_map):
-        func = pre.op
-
-        # We don't add transforms around soma_dory element-wise add ops
-        if func.attrs.Composite == 'soma_dory.add':
-            return func(*post.args)
-
-        shape_begin = pre.args[0].checked_type.shape
-        shape_end = pre.checked_type.shape
-
-        x = post.args[0]
-        x = create_layout_transform(x, shape_begin)
-        x = func(x, *post.args[1:])
-        x = create_layout_transform(x, shape_end)
-
-        return x
+    # For all other ops that we don't know, consider them sensitive
+    return True
 
 
-class SomaDoryInsertTransformsDiamondPattern(DFPatternCallback):
-    """Insert transformations on diamond patterns
-       Example:
-
-           before          after
-
-             |               |
-             |              tfm
-             |               |
-            / \             / \
-           /   \           /   \
-          |     |        tfm   tfm
-          *     *   -->   *     *
-          |     |        tfm   tfm
-           \   /           \   /
-         reduction       reduction
-             |               |
-             |              tfm
-             |               |
-
-       where '*' is any given subgraph, 'reduction' is an element-wise reduction pattern
-       and 'tfm' is a layout transform.
+class ConstructNetworkXGraph(ExprVisitor):
+    """Construct a networkx graph from relay graph
     """
-    def __init__(self, require_type=True, rewrite_once=True):
-        super().__init__(require_type, rewrite_once)
+    def __init__(self):
+        super().__init__()
+        self.g = nx.DiGraph()
 
-        self.x = wildcard()
-        # we match to any ops on both branches and filter out the rest in the callback
-        self.a = wildcard()
-        self.b = wildcard()
-        #reduction = FunctionPattern([wildcard(), wildcard()], wildcard())(self.a, self.b) | \
-        reduction = is_op('add')(self.a, self.b)
-        fuzzy = FunctionPattern([wildcard(), wildcard(), wildcard()], wildcard())(wildcard(), wildcard(), wildcard())
+    def visit_call(self, call):
+        """Convert every op call to a node"""
 
-        self.pattern = dominates(self.x, fuzzy, reduction)
+        # determine layout of this node
+        layout = 'x'    # set to don't care
+        if isinstance(call.op, relay.Function) and 'Composite' in call.op.attrs:
+            if call.op.attrs.Composite != 'soma_dory.add':
+                layout = 'acc'
+        else:
+            # the op is mapped to the cpu. If the op is sensitive to layout, mark that it requires cpu layout.
+            if is_op_layout_sensitive(call):
+                layout = 'cpu'
 
-    def callback(self, pre, post, node_map):
-        x = node_map[self.x][0]
-        a = node_map[self.a][0]
-        b = node_map[self.b][0]
+        # create node from call
+        self.g.add_node(call, layout=layout)
 
-        shape_input = x.checked_type.shape
-        shape_output = a.checked_type.shape
+        # add a link from each previous call/node to this one
+        for a in call.args:
+            if not isinstance(a, relay.Constant):   # avoid creating edges to constants
+                self.g.add_edge(a, call, tfm=False)
 
-        # rewrite branch with additional transformations
-        x_ = create_layout_transform(x, shape_input)
-        a_ = create_layout_transform(x_, shape_input)
-        b_ = create_layout_transform(x_, shape_input)
+        self.visit(call.op)
+        for a in call.args:
+            self.visit(a)
 
-        # repeat whatever is on the left (a) side on top of a_
-        a_ = clone_sub_graph(x, a, a_)
+    def visit_function(self, fn):
+        # avoid visiting partitioned functions and parameters
+        # (partitioned functions have attributes, main function doesn't)
+        if fn.attrs is not None:
+            return
 
-        # repeat whatever is on the right (b) side on top of b_
-        b_ = clone_sub_graph(x, b, b_)
+        for x in fn.params:
+            self.visit(x)
+        self.visit(fn.body)
 
-        # rewrite reduction with additional transforms
-        a_ = create_layout_transform(a_, shape_output)
-        b_ = create_layout_transform(b_, shape_output)
-        x = pre.op(a_, b_)
-        x = create_layout_transform(x, shape_output)
+        # add output node which is always cpu layout (function return)
+        self.g.add_node(fn, layout='cpu')
+        self.g.add_edge(fn.body, fn, tfm=False)
 
-        return x
+    def visit_var(self, var):
+        # create node for each input variable (main function only)
+        self.g.add_node(var, layout='cpu')
 
 
-class SomaDoryRemoveDuplicateTransforms(DFPatternCallback):
-    """Remove consecutive duplicate transforms:
-    If we encounter:
-        -> layout_transform -> layout_transform ->
-    we remove both
+class InsertLayoutTransforms(ExprMutator):
+    """Insert layout transforms in relay graph based on information from a networkx graph
     """
-    def __init__(self, require_type=False, rewrite_once=True):
-        super().__init__(require_type, rewrite_once)
+    def __init__(self, netx_graph):
+        super().__init__()
+        self.g = netx_graph
 
-        self.x = wildcard()
-        x = create_layout_transform_pattern(self.x)
-        self.pattern = create_layout_transform_pattern(x)
+    def visit_function(self, fn):
+        # avoid modifying partitioned functions
+        if fn.attrs is not None:
+            return fn
 
-    def callback(self, pre, post, node_map):
-        x = node_map[self.x][0]
-        return x
+        new_params = [self.visit(x) for x in fn.params]
+        new_body = self.visit(fn.body)
+
+        # add layout transform after last call if needed
+        if self.g.edges[(fn.body, fn)]['tfm']:
+            new_body = create_layout_transform(new_body, fn.body.checked_type.shape)
+
+        return relay.function.FunctionWithFields(
+            fn,
+            list(new_params),
+            new_body,
+        )
+
+    def visit_call(self, call):
+        """Insert tfm op before this call if needed for every non constant input
+        """
+        new_fn = self.visit(call.op)
+        new_args = []
+        for arg in call.args:
+            new_arg = self.visit(arg)
+            if not isinstance(arg, relay.Constant) and self.g.edges[(arg, call)]['tfm']:
+                new_arg = create_layout_transform(new_arg, arg.checked_type.shape)
+            new_args.append(new_arg)
+
+        return relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
+
+
+#import matplotlib.pyplot as plt
+#def show_graph(g):
+#    pos = nx.spring_layout(g, scale=2)
+#    plt.figure(figsize=(12, 12))
+#    nx.draw(g, pos, node_size=1000)
+#    node_labels = nx.get_node_attributes(g, 'layout')
+#    nx.draw_networkx_labels(g, pos, labels=node_labels)
+#    edge_labels = nx.get_edge_attributes(g, 'tfm')
+#    edge_labels = {k:('tfm' if v else '') for k, v in edge_labels.items()}
+#    nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels)
+#    plt.show()
 
 
 @tvm.ir.transform.module_pass(opt_level=0)
 class SomaDoryLayoutTransform:
-    """ Insert diana accelerator data layout transformation where needed. This is done in two steps:
-    1) Find all annotated soma_dory functions (except for element-wise add since this op does not need the transformations)
-       and insert a 'reshape -> reverse -> reshape' transformation before and after the function
-    2) Remove duplicate/unnessasary transformations in a few separate passes
+    """ Insert layout transforms where needed
     """
     def transform_module(
         self, mod: tvm.ir.IRModule, ctx: tvm.ir.transform.PassContext
     ) -> tvm.ir.IRModule:
         for global_var, func in mod.functions.items():
-            func = rewrite(SomaDoryInsertTransformsAroundFunctions(), func)
-            print("After insert transform")
-            print(func)
-            func = rewrite(SomaDoryInsertTransformsDiamondPattern(), func)
-            print("After insert transform diamond pattern")
-            print(func)
-            func = rewrite(SomaDoryRemoveDuplicateTransforms(), func)
-            print("After removing transforms")
-            print(func)
+            netx_ctor = ConstructNetworkXGraph()
+            netx_ctor.visit(func)
+
+            calculate_transforms(netx_ctor.g)
+            #show_graph(netx_ctor.g)    # for debugging, uncomment to visualize networkx graph
+
+            tfm = InsertLayoutTransforms(netx_ctor.g)
+            func = tfm.visit(func)
+
             mod.update_func(global_var, func)
-        mod = transform.InferType()(mod)
         return mod
 
     def __call__(self, mod):

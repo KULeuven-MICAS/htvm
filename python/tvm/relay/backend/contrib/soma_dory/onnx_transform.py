@@ -147,9 +147,13 @@ class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
 
         div_factor = div.data.numpy()
         div_factor_log2 = np.log2(div_factor)
+        x_is_float_var = isinstance(x, relay.Var) and x.type_annotation.dtype == 'float32'
 
         # check if division can be replaced by a right_shift
-        if div_factor_log2 == np.round(div_factor_log2) and div_factor_log2 >= 0:
+        if not x_is_float_var and \
+           div_factor_log2 == np.round(div_factor_log2) and \
+           div_factor_log2 >= 0:
+
             shift_factor = div_factor_log2.astype('int32')
             x = relay.op.right_shift(x, relay.const(shift_factor))
         else:
