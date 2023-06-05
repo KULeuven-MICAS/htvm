@@ -9,6 +9,8 @@ import subprocess
 import pathlib
 import shutil
 import argparse
+import onnx
+from tvm.relay.backend.contrib.soma_dory.onnx_transform import DianaOnnxIntegerize
 
 import mlperf_tiny.relay_ds_cnn
 import mlperf_tiny.relay_mobilenet
@@ -38,22 +40,17 @@ class Driver(ABC):
     :param byoc_path: directory that contains necessary files to import.
         Some files that can be imported include Makefiles, headers, and 
         libraries.
-    :param no_of_inputs: amount of inputs for the IR module.
-        This information is necessary in for generating C wrapper code in
-        build_dir/src/demo.c.
     """
     def __init__(self,
                  mod: tvm.ir.IRModule,
                  params: Dict[str, tvm.nd.array],
                  build_dir: pathlib.Path = "build",
-                 byoc_path: pathlib.Path = ".",
-                 no_of_inputs: int = 1):
+                 byoc_path: pathlib.Path = "."):
         """Constructor method
         """
         self.model = TVMCModel(mod, params)
         self.build_dir = build_dir
         self.byoc_path = byoc_path
-        self.no_of_inputs = no_of_inputs
 
     @abstractmethod
     def tvm_compile(self, 
@@ -127,9 +124,8 @@ class X86Driver(Driver):
                  mod: tvm.ir.IRModule,
                  params: Dict[str, tvm.nd.array],
                  build_dir: pathlib.Path = "build",
-                 byoc_path: pathlib.Path = ".",
-                 no_of_inputs: int = 1):
-        super(X86Driver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
+                 byoc_path: pathlib.Path = "."):
+        super(X86Driver, self).__init__(mod, params, build_dir, byoc_path)
         self.device = "x86"
         self.build_dir = self.build_dir / self.device
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
@@ -144,7 +140,6 @@ class X86Driver(Driver):
                                       byoc_path=self.byoc_path,
                                       build_path=self.build_dir)
         utils.create_demo_file(self.model.mod, init_value=init_value,
-                               no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
 
     def gcc_compile(self, gcc_opt: int = 0):
@@ -163,9 +158,8 @@ class DianaDriver(Driver):
                  params: Dict[str, tvm.nd.array],
                  build_dir: pathlib.Path = "build",
                  byoc_path: pathlib.Path = ".",
-                 dory_path: pathlib.Path = "/dory",
-                 no_of_inputs: int = 1):
-        super(DianaDriver, self).__init__(mod, params, build_dir, byoc_path, no_of_inputs)
+                 dory_path: pathlib.Path = "/dory"):
+        super(DianaDriver, self).__init__(mod, params, build_dir, byoc_path)
         self.device = "pulp"
         self.build_dir = self.build_dir / self.device
         # Placeholders in case profiling code is added
@@ -207,7 +201,6 @@ class DianaDriver(Driver):
             shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
         utils.create_demo_file(self.model.mod, 
                                init_value=init_value,
-                               no_of_inputs=self.no_of_inputs,
                                directory=self.build_dir)
     def gcc_compile(self, gcc_opt: int = 3):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
@@ -267,8 +260,7 @@ class DianaDriver(Driver):
 def driver(mod: tvm.ir.IRModule, 
            params: Dict[str, tvm.nd.array],
            run: bool = False, build_dir: pathlib.Path = "build",
-           byoc_path: pathlib.Path = ".",
-           no_of_inputs: int = 1):
+           byoc_path: pathlib.Path = "."):
     """
     Compile (and run) a model for DIANA for testing purposes
 
@@ -278,7 +270,7 @@ def driver(mod: tvm.ir.IRModule,
     """
     # Create the model library format file and unpack
     d_diana = DianaDriver(mod, params, build_dir=build_dir,
-                          byoc_path=byoc_path, no_of_inputs=no_of_inputs)
+                          byoc_path=byoc_path)
     d_diana.tvm_compile(fusion=True)
     d_diana.add_profiler(measurement="global")
     d_diana.gcc_compile(gcc_opt=3)
@@ -288,7 +280,7 @@ def driver(mod: tvm.ir.IRModule,
         output_pulp = d_diana.run()
         d_diana.process_profile()
         # Compile and run the network on x86
-        d_x86 = X86Driver(mod, params, build_dir, byoc_path, no_of_inputs)
+        d_x86 = X86Driver(mod, params, build_dir, byoc_path)
         d_x86.tvm_compile(fusion=False)
         d_x86.gcc_compile(gcc_opt=0)
         output_x86 = d_x86.run()
@@ -304,8 +296,7 @@ if __name__ == "__main__":
                         help="Target string to pass onto TVMC, note that " + \
                              "'-device=arm_cpu' is appended to the string " +\
                              "later",
-                        default="soma_dory -layout_transform=0 "+\
-                                "-requant_transform=0, c")
+                        default="soma_dory, c")
     parser.add_argument('--device', dest='device',
                         choices = ("pulp", "x86"),
                         help="Device to make binary for (default 'pulp')",
@@ -323,15 +314,14 @@ if __name__ == "__main__":
                         choices = (0, 1, 2, 3), type=int,
                         help="Set the gcc optimization level",
                         default=3)
-    parser.add_argument('--inputs', dest='no_of_inputs', type=int,
-                        help="Set number of TVM model inputs",
-                        default=1)
     parser.add_argument('--byoc_path', dest='byoc_path', type=pathlib.Path,
                         help="Set path to BYOC folder",
                         default=pathlib.Path("/tvm-fork/diana/byoc"))
     parser.add_argument('--build_dir', dest='build_dir', type=pathlib.Path,
                         help="Set output build directory",
                         default=pathlib.Path("/tmp"))
+    parser.add_argument('--onnx', type=pathlib.Path,
+                        help="Input onnx file from quantlib", default=None)
 
     # New group for PULP specific arguments
     pulp_group = parser.add_argument_group("Diana/pulp-specific arguments")
@@ -368,7 +358,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Running with --net overrides some options
-    if args.network is not None:
+    if args.onnx is not None:
+        onnx_model = onnx.load(args.onnx)
+        ir_module, params = relay.frontend.from_onnx(onnx_model, freeze_params=True)
+
+        # Diana quantlib specific interpretation pass
+        ir_module = DianaOnnxIntegerize()(ir_module)
+
+    elif args.network is not None:
         # Defaults
         args.device = "pulp"
         args.target = "soma_dory layout_transform=0 -requant_transform=0, c"
@@ -400,6 +397,8 @@ if __name__ == "__main__":
                 weight_bits = weight_bits,
                 add_layout_transforms = add_layout_transforms,
                 mixed = mixed)
+    else:
+        raise ValueError("Either provide --onnx or --net to specify a network model")
 
     # Some options shouldn't be used together
     if args.device=="x86":
@@ -428,8 +427,7 @@ if __name__ == "__main__":
         driver = DianaDriver(ir_module, params, 
                              args.build_dir / get_options_string(args), 
                              args.byoc_path, 
-                             args.dory_path, 
-                             args.no_of_inputs)
+                             args.dory_path)
         driver.tvm_compile(target=args.target,
                            fusion=args.fusion,
                            indefinite=args.indefinite,
@@ -437,8 +435,7 @@ if __name__ == "__main__":
     elif args.device == "x86":
         driver = X86Driver(ir_module, params, 
                            args.build_dir / get_options_string(args), 
-                           args.byoc_path,
-                           args.no_of_inputs)
+                           args.byoc_path)
         driver.tvm_compile(target=args.target,fusion=args.fusion)
     if args.measurement is not None:
         driver.add_profiler(measurement=args.measurement)

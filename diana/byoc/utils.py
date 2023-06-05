@@ -103,6 +103,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                            strides=strides,
                            padding=padding,
                            groups=groups,
+                           kernel_size=w_value.shape[2:],
                            out_dtype=b_value.dtype)
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits))
@@ -249,7 +250,7 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
 
 def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
                             fuse_layers: bool = True,
-                            build_path: str = "./build",
+                            build_path: str = pathlib.Path("./build"),
                             byoc_path: str = ".",
                             device="pulp"):
     '''
@@ -349,7 +350,6 @@ def copy_dory_files(dory_path: str = "/dory",
 
 def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build", 
                      init_value: int = 1, indefinite: bool = False, 
-                     no_of_inputs: int = 1,
                      boot_analog: bool = False):
     '''
     Function that creates a demo file in which inputs and outputs of the
@@ -357,11 +357,6 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
 
     https://discuss.tvm.apache.org/t/
     how-to-get-the-input-and-output-of-relay-call-node/8743
-
-    Note, the no_of_inputs argument currently sets extra inputs.
-    This is for example necessary in the testing of add layers (2 inputs)
-    Beware that this does not include any sanity checking!
-    It just takes the two most upfront inferred types!
     '''
     directory = pathlib.Path(directory)
     def get_c_type(dtype):
@@ -378,50 +373,44 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
     mod = relay.transform.InferType()(mod)
     # Assuming the first arguments are the user-supplied input
     # Convert from TVM runtime datatype to numpy array
-    input_shapes = []
-    input_dtypes = []
-    for i in range(no_of_inputs):
-        input_shapes.append(np.array(mod["main"].checked_type.arg_types[i].shape))
-        input_dtypes.append(mod["main"].checked_type.arg_types[i].dtype)
-    type_decls_in = [get_c_type(dtype) for dtype in input_dtypes]
+    input_params = mod["main"].params
     # Assuming there is only output to this Relay IRMod
     # Convert from TVM runtime datatype to numpy array
     output_shape = np.array(mod["main"].checked_type.ret_type.shape)
     output_dtype = mod["main"].checked_type.ret_type.dtype
     create_demo_gdb_scripts(output_dtype, directory=directory)
-    type_decl_out = get_c_type(output_dtype)
+    output_type_decl = get_c_type(output_dtype)
     if boot_analog:
         analog_boot_include = "#include <utils.h>\n"
         analog_boot_code = "boot_diana();"
     else:
         analog_boot_include = ""
         analog_boot_code = ""
-    print("Creating demo file: Inferred shapes:")
-    for i in range(no_of_inputs):
-        print(f"\tinput ({input_dtypes[i]}):")
-        print(f"\t {input_shapes[i]}")
-    print(f"\toutput ({output_dtype}):")
-    print(f"\t {output_shape}")
+
     mallocs = ""
     frees = ""
     sizes = ""
-    for i, type_d in enumerate(type_decls_in):
-        mallocs += f"  {type_d} *input_{i} = ({type_d}*)malloc_wrapper(input_{i}_size * sizeof({type_d}));\n"
-        frees += f"  free_wrapper(input_{i});\n"
-    mallocs += f"  {type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));\n\n"
-    frees += "    free_wrapper(output);\n"
+    call =   "  struct tvmgen_default_outputs outputs = { .output = output, };\n"
+    call +=  "  struct tvmgen_default_inputs inputs = {\n"
     inits = f"  // Fill input with {init_value}\n"
-    for i, input_shape in enumerate(input_shapes):
-        sizes += f"  uint32_t input_{i}_size = {np.prod(input_shape)};\n"
-        inits += "  for (uint32_t i = 0; i < input_"+str(i)+"_size; i++){\n"
-        inits += f"    input_{i}[i] = {init_value};\n"
-        inits += "  }\n"
-    sizes += f"  uint32_t output_size = {np.prod(output_shape)};\n\n"
-    call = "  struct tvmgen_default_outputs outputs = { .output = output, };\n"
-    call += "  struct tvmgen_default_inputs inputs = {\n"
-    for i in range(len(input_shapes)):
-        call += f"    .input_{i} = input_{i},\n"
-    call += "  };\n\n"
+
+    for input_param in input_params:
+        input_type_decl = get_c_type(input_param.type_annotation.dtype)
+        input_shape = input_param.type_annotation.shape
+        input_name = input_param.name_hint.replace(':', '_')
+        sizes +=   f"  const uint32_t {input_name}_size = {np.prod(input_shape)};\n"
+        mallocs += f"  {input_type_decl} *{input_name} = ({input_type_decl}*)malloc_wrapper({input_name}_size * sizeof({input_type_decl}));\n"
+        inits +=   f"  for (uint32_t i = 0; i < {input_name}_size; i++){{\n"
+        inits +=   f"    {input_name}[i] = {init_value};\n"
+        inits +=    "  }\n"
+        call +=    f"    .{input_name} = {input_name},\n"
+        frees +=   f"  free_wrapper({input_name});\n"
+
+    mallocs += f"  {output_type_decl} *output = ({output_type_decl}*)malloc_wrapper(output_size * sizeof({output_type_decl}));\n\n"
+    frees +=    "    free_wrapper(output);\n"
+    sizes +=   f"  uint32_t output_size = {np.prod(output_shape)};\n\n"
+    call +=     "  };\n\n"
+
     # Now produce the final c code
     c_code = "#include <stdio.h>\n"  +\
              "#include <stdint.h>\n" +\
@@ -450,6 +439,7 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
     "  }\n" +\
     "  return 0;\n" +\
     "}\n"
+
     with open(directory/ "src/demo.c", "w") as file:
         file.writelines(c_code)
 

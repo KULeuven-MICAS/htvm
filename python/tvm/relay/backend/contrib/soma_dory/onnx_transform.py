@@ -120,6 +120,37 @@ class DianaOnnxMergeDuplicateDiv(DFPatternCallback):
         return relay.op.divide(x, relay.const(div))
 
 
+def create_requant(x, div_factor, a_min, a_max, shift_factor_dtype='int32'):
+    """Create either:
+
+         1)    right_shift -> clip -> cast(int8)
+         2)    div -> clip -> cast(int8)
+
+       on top of 'x', based on division factor div_factor
+       Create pattern 1 in case x is not an input (Var) and div_factor is a power-of-two value > 1
+       Create pattern 2 otherwise
+
+    """
+    div_factor_log2 = np.log2(div_factor)
+    x_is_float_var = isinstance(x, relay.Var) and x.type_annotation.dtype == 'float32'
+
+    # check if division can be replaced by a right_shift
+    if not x_is_float_var and \
+       div_factor_log2 == np.round(div_factor_log2) and \
+       div_factor_log2 >= 0:
+
+        shift_factor = div_factor_log2.astype(shift_factor_dtype)
+        assert shift_factor.size == 1
+        x = relay.op.right_shift(x, relay.const(shift_factor[0]))
+    else:
+        x = relay.op.divide(x, relay.const(div_factor))
+
+    x = relay.op.clip(x, a_min=a_min, a_max=a_max)
+    x = relay.op.cast(x, 'int8')
+
+    return x
+
+
 class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
     """Rewriter for digital requant pattern
     Rewrite: div -> floor -> max -> min
@@ -145,24 +176,9 @@ class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
         maximum = node_map[self.maximum][0]
         minimum = node_map[self.minimum][0]
 
-        div_factor = div.data.numpy()
-        div_factor_log2 = np.log2(div_factor)
-        x_is_float_var = isinstance(x, relay.Var) and x.type_annotation.dtype == 'float32'
-
-        # check if division can be replaced by a right_shift
-        if not x_is_float_var and \
-           div_factor_log2 == np.round(div_factor_log2) and \
-           div_factor_log2 >= 0:
-
-            shift_factor = div_factor_log2.astype('int32')
-            x = relay.op.right_shift(x, relay.const(shift_factor))
-        else:
-            x = relay.op.divide(x, relay.const(div_factor))
-
-        x = relay.op.clip(x, a_min=int(maximum.data.numpy()), a_max=int(minimum.data.numpy()))
-        x = relay.op.cast(x, 'int8')
-
-        return x
+        return create_requant(x, div.data.numpy(),
+                              int(maximum.data.numpy()),
+                              int(minimum.data.numpy()))
 
 
 class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
@@ -214,12 +230,9 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         x = relay.op.multiply(x, relay.const(mul.data.numpy().astype('int16')))
         x = relay.op.add(x, relay.const(add.data.numpy().astype('int16')))
 
-        shift_factor = np.log2(div2.data.numpy()).astype('int16')
-        x = relay.op.right_shift(x, relay.const(shift_factor))
-        x = relay.op.clip(x, a_min=int(maximum2.data.numpy()), a_max=int(minimum2.data.numpy()))
-        x = relay.op.cast(x, 'int8')
-
-        return x
+        return create_requant(x, div2.data.numpy(),
+                              int(maximum2.data.numpy()),
+                              int(minimum2.data.numpy()), 'int16')
 
 
 class DianaOnnxCorrectDequant(DFPatternCallback):
