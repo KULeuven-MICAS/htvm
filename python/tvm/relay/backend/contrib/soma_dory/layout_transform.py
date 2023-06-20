@@ -22,7 +22,6 @@ import networkx as nx
 from tvm import relay
 from tvm.relay import transform
 from tvm.relay.expr_functor import ExprMutator, ExprVisitor
-from tvm.relay.dataflow_pattern import DFPatternCallback, FunctionPattern, dominates, rewrite, wildcard, is_op, is_constant
 
 
 def create_layout_transform(x, shape):
@@ -120,6 +119,9 @@ class ConstructNetworkXGraph(ExprVisitor):
 
         # add a link from each previous call/node to this one
         for a in call.args:
+            if isinstance(a, relay.Tuple):  # TODO: needed to support concatenate
+                raise NotImplementedError("TODO")
+
             if not isinstance(a, relay.Constant):   # avoid creating edges to constants
                 self.g.add_edge(a, call, tfm=False)
 
