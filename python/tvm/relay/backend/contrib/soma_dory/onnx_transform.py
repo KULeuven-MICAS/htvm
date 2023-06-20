@@ -157,26 +157,33 @@ class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
          to: right_shift -> clip -> cast(int8)
          or: div -> clip -> cast(int8)
     """
-    def __init__(self, require_type=False):
+    def __init__(self, with_div=True, require_type=False):
         super().__init__(require_type)
 
         self.x = wildcard()
-        self.div = is_constant()
         self.maximum = is_constant()
         self.minimum = is_constant()
 
-        div = is_op("divide")(self.x, self.div)
+        self.div = None
+        div = self.x
+        if with_div:
+            self.div = is_constant()
+            div = is_op("divide")(self.x, self.div)
+
         floor = is_op("floor")(div)
         maximum = is_op("maximum")(floor, self.maximum)
         self.pattern = is_op("minimum")(maximum, self.minimum)
 
     def callback(self, pre, post, node_map):
         x = node_map[self.x][0]
-        div = node_map[self.div][0]
         maximum = node_map[self.maximum][0]
         minimum = node_map[self.minimum][0]
 
-        return create_requant(x, div.data.numpy(),
+        div = np.array([1.0])
+        if self.div is not None:
+            div = node_map[self.div][0].data.numpy()
+
+        return create_requant(x, div,
                               int(maximum.data.numpy()),
                               int(minimum.data.numpy()))
 
@@ -206,7 +213,7 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         minimum1 = is_op("minimum")(maximum1, self.minimum1)
         mul = is_op("multiply")(minimum1, self.mul)
         add = is_op("add")(mul, self.add)
-        div2 = is_op("divide")(add, self.div2)
+        div2 = add.optional(lambda x: is_op("divide")(x, self.div2))
         floor2 = is_op("floor")(div2)
         maximum2 = is_op("maximum")(floor2, self.maximum2)
         self.pattern = is_op("minimum")(maximum2, self.minimum2)
@@ -218,7 +225,6 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         minimum1 = node_map[self.minimum1][0]
         mul = node_map[self.mul][0]
         add = node_map[self.add][0]
-        div2 = node_map[self.div2][0]
         maximum2 = node_map[self.maximum2][0]
         minimum2 = node_map[self.minimum2][0]
 
@@ -230,7 +236,11 @@ class DianaOnnxAnalogBnRequantRewriter(DFPatternCallback):
         x = relay.op.multiply(x, relay.const(mul.data.numpy().astype('int16')))
         x = relay.op.add(x, relay.const(add.data.numpy().astype('int16')))
 
-        return create_requant(x, div2.data.numpy(),
+        div2 = np.array([1.0])
+        if self.div2 in node_map:
+            div2 = node_map[self.div2][0].data.numpy()
+
+        return create_requant(x, div2,
                               int(maximum2.data.numpy()),
                               int(minimum2.data.numpy()), 'int16')
 
@@ -274,7 +284,8 @@ class DianaOnnxIntegerize:
             func = rewrite(DianaOnnxIntegerizeElementWiseSum(), func)
             func = rewrite(DianaOnnxMergeDuplicateDiv(), func)
             func = rewrite(DianaOnnxAnalogBnRequantRewriter(), func)
-            func = rewrite(DianaOnnxDigitalRequantRewriter(), func)
+            func = rewrite(DianaOnnxDigitalRequantRewriter(with_div=True), func)
+            func = rewrite(DianaOnnxDigitalRequantRewriter(with_div=False), func)
             func = rewrite(DianaOnnxCorrectDequant(), func)
             mod.update_func(global_var, func)
         return mod
