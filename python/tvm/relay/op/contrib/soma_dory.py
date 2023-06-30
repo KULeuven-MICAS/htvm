@@ -20,6 +20,7 @@ Operations to support the SOMA accelerator.
 
 import tvm
 import logging
+import numpy as np
 from functools import partial
 
 from tvm.relay import transform
@@ -230,9 +231,23 @@ def _check_conv2d(conv2d, is_analog):
 
     return True
 
+def _check_activation_shape(pattern, op_name, io_str):
+    """The accelerator processes elements by four.
+    Therefore the the tensor input/output size must be divisible by four.
+    """
+    tensor_shape = pattern.checked_type.shape
+    if (np.prod(tensor_shape) % 4) != 0:
+        logger.warning(f"Expected {io_str} tensor size to be divisible by 4, got {tensor_shape}. " +\
+                       f"Acceleration for this {op_name} is not supported")
+        return False
+    return True
+
 
 def check_conv2d(pattern):
     """Check if the Conv2D is supported by the soma dory accelerator"""
+
+    if not _check_activation_shape(pattern, 'conv2d', 'output'):
+        return False
 
     conv2d = _check_biasadd_requant(pattern)
     if conv2d is None:
@@ -241,10 +256,16 @@ def check_conv2d(pattern):
     if not _check_conv2d(conv2d, False):
         return False
 
+    if not _check_activation_shape(conv2d.args[0], 'conv2d', 'input'):
+        return False
+
     return True
 
 def check_analog_conv2d(pattern):
     """Check if the analog Conv2D is supported by the soma dory accelerator"""
+
+    if not _check_activation_shape(pattern, 'aconv2d', 'output'):
+        return False
 
     conv2d = _check_analog_bn_requant(pattern)
     if conv2d is None:
@@ -260,12 +281,17 @@ def check_analog_conv2d(pattern):
                         "Acceleration for this conv2d is not supported")
         return False
 
+    if not _check_activation_shape(conv2d.args[0], 'aconv2d', 'input'):
+        return False
 
     return True
 
 
 def check_fully_connected(pattern):
     """Check if the fully connected layer is supported by the soma dory accelerator"""
+
+    if not _check_activation_shape(pattern, 'dense', 'output'):
+        return False
 
     fc = _check_biasadd_requant(pattern)
     if fc is None:
@@ -274,11 +300,18 @@ def check_fully_connected(pattern):
     #fc_input = fc.args[0]
     #fc_weight = fc.args[1]
 
+    if not _check_activation_shape(fc.args[0], 'dense', 'input'):
+        return False
+
     return True
 
 
 def check_element_wise_add(pattern):
     """Check if the element-wise-add layer is supported by the soma dory accelerator"""
+
+    if not _check_activation_shape(pattern, 'add', 'output'):
+        return False
+
     add = _check_requant(pattern)
     if add is None:
         return False
