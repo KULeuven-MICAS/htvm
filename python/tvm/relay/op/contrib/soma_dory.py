@@ -361,6 +361,7 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
 
     pipeline = []
 
+    pipeline.append(transform.InferType())
     pipeline.append(tvm.transform.PrintIR())
     pipeline.append(transform.MergeComposite(pattern_table()))
     if 'layout_transform' not in opts or opts['layout_transform'] != '0':

@@ -52,7 +52,8 @@ def calculate_transforms(g):
             toggle_tfms(g, all_edges(g, node))
 
     # optimize transforms around 'x' nodes (don't care), this part is usefull for residual networks
-    for i in range(2):  # repeat twice to ensure all 'x' nodes are fully optimized
+    for i in range(10):    # do multiple iterations, but set an upper limit to avoid infinite loop
+        improvements_made = False
         for node, data in g.nodes(data=True):
             if data['layout'] != 'x':
                 continue
@@ -63,11 +64,18 @@ def calculate_transforms(g):
             # check if we can reduce the amount of tfms
             if sum(edge_tfms) > len(edges) // 2:
                 toggle_tfms(g, edges)
+                improvements_made = True
 
             # if all inputs contain a tfm, move them to the outputs
-            edge_in_tfms = [g.edges[edge]['tfm'] for edge in g.in_edges(node)]
-            if sum(edge_in_tfms) == len(edge_in_tfms):
-                toggle_tfms(g, edges)
+            # Commented this out, not sure anymore why this was usefull
+            #edge_in_tfms = [g.edges[edge]['tfm'] for edge in g.in_edges(node)]
+            #if sum(edge_in_tfms) == len(edge_in_tfms):
+            #    toggle_tfms(g, edges)
+            #    improvements_made = True
+
+        if not improvements_made:
+            # optimization complete
+            break
 
 
 def is_op_layout_sensitive(call):
