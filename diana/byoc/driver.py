@@ -55,8 +55,7 @@ class Driver(ABC):
     @abstractmethod
     def tvm_compile(self, 
                     target: str = "c",
-                    fusion: bool = False,
-                    init_value: int = 1):
+                    fusion: bool = False):
         """Compiles network to C code with TVM
 
         This is a wrapper method around TVMC that generates C code for the 
@@ -66,7 +65,6 @@ class Driver(ABC):
         :param target: target parameter passed to TVMC
         :param fusion: Enable/Disable operator fusion pass for TVM generated
             kernels
-        :param init_value: input value set in calling wrapper
         """
         raise NotImplementedError()
 
@@ -132,15 +130,15 @@ class X86Driver(Driver):
 
     def tvm_compile(self, 
                     target: str ="c",
-                    fusion: bool = False, 
-                    init_value: int = 1):
+                    fusion: bool = False):
         utils.tvmc_compile_and_unpack(self.model,
                                       target=target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
                                       build_path=self.build_dir)
-        utils.create_demo_file(self.model.mod, init_value=init_value,
-                               directory=self.build_dir)
+        utils.create_demo_file(self.model,
+                               directory=self.build_dir,
+                               use_printf=True)
 
     def gcc_compile(self, gcc_opt: int = 0):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.x86", gcc_opt)
@@ -171,7 +169,6 @@ class DianaDriver(Driver):
     def tvm_compile(self, 
                     target: str = "soma_dory -requant_transform=0, c",
                     fusion: bool = True,
-                    init_value: int = 1,
                     indefinite: bool = False,
                     boot_analog: bool = False,
                     ):
@@ -184,13 +181,12 @@ class DianaDriver(Driver):
         :param target: target parameter passed to TVMC
         :param fusion: Enable/Disable operator fusion pass for TVM generated
             kernels
-        :param init_value: input value set in calling wrapper
         :param indefinite: put infinite loop around TVM network. Useful for
             power measurements.
         :param boot_analog: put analog core boot code in C wrapper before
             calling TVM generated code.
         """
-        utils.tvmc_compile_and_unpack(self.model, 
+        utils.tvmc_compile_and_unpack(self.model,
                                       target=target,
                                       fuse_layers=fusion,
                                       byoc_path=self.byoc_path,
@@ -199,8 +195,7 @@ class DianaDriver(Driver):
         # used for processing the output of individual profiling data
         if "soma_dory" in target:
             shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
-        utils.create_demo_file(self.model.mod, 
-                               init_value=init_value,
+        utils.create_demo_file(self.model,
                                directory=self.build_dir)
     def gcc_compile(self, gcc_opt: int = 3):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
@@ -361,9 +356,17 @@ if __name__ == "__main__":
     if args.onnx is not None:
         onnx_model = onnx.load(args.onnx)
         ir_module, params = relay.frontend.from_onnx(onnx_model, freeze_params=True)
-
         # Diana quantlib specific interpretation pass
         ir_module = DianaOnnxIntegerize()(ir_module)
+        print(ir_module)
+
+        # Check if the same folder as args.onnx contains .npy files. If yes, parse them and
+        # store them in params
+        for fname in pathlib.Path(args.onnx).parent.glob('*.npy'):
+            param_name = 'g_' + fname.stem
+            params[param_name] = np.load(fname)
+
+        print(ir_module)
 
     elif args.network is not None:
         # Defaults
@@ -436,7 +439,8 @@ if __name__ == "__main__":
         driver = X86Driver(ir_module, params, 
                            args.build_dir / get_options_string(args), 
                            args.byoc_path)
-        driver.tvm_compile(target=args.target,fusion=args.fusion)
+        driver.tvm_compile(target=args.target,
+                           fusion=args.fusion)
     if args.measurement is not None:
         driver.add_profiler(measurement=args.measurement)
     driver.gcc_compile(gcc_opt=args.gcc_opt)
