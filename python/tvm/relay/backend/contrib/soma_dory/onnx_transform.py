@@ -98,26 +98,36 @@ class DianaOnnxIntegerizeElementWiseSum(DFPatternCallback):
         return y
 
 
-class DianaOnnxMergeDuplicateDiv(DFPatternCallback):
-    """Merge consecutive div ops with constants together (workaround for bug in quantlib)
+class DianaOnnxIntegerizeGlobalAvgPool2d(DFPatternCallback):
+    """Find:
+            global_avg_pool2d -> batch_flatten -> floor -> max -> min
+        Replace with :
+            cast(int32) -> global_avg_pool2d -> batch_flatten -> clip -> cast(int8)
     """
     def __init__(self, require_type=False, rewrite_once=True):
         super().__init__(require_type, rewrite_once)
 
         self.x = wildcard()
-        self.div1 = is_constant()
-        self.div2 = is_constant()
+        self.maximum = is_constant()
+        self.minimum= is_constant()
 
-        div1 = is_op("divide")(self.x, self.div1)
-        self.pattern = is_op("divide")(div1, self.div2)
+        pool = is_op("nn.global_avg_pool2d")(self.x)
+        flatten = is_op("nn.batch_flatten")(pool)
+        floor = is_op("floor")(flatten)
+        maximum = is_op("maximum")(floor, self.maximum)
+        self.pattern = is_op("minimum")(maximum, self.minimum)
 
     def callback(self, pre, post, node_map):
         x = node_map[self.x][0]
-        div1 = node_map[self.div1][0]
-        div2 = node_map[self.div2][0]
+        maximum = node_map[self.maximum][0]
+        minimum = node_map[self.minimum][0]
 
-        div = div1.data.numpy() * div2.data.numpy()
-        return relay.op.divide(x, relay.const(div))
+        x = relay.cast(x, 'int32')
+        x = relay.nn.global_avg_pool2d(x)
+        x = relay.nn.batch_flatten(x)
+        x = relay.clip(x, a_min=int(maximum.data.numpy()), a_max=int(minimum.data.numpy()))
+        x = relay.cast(x, 'int8')
+        return x
 
 
 def create_requant(x, div_factor, a_min, a_max, shift_factor_dtype='int32'):
@@ -134,7 +144,7 @@ def create_requant(x, div_factor, a_min, a_max, shift_factor_dtype='int32'):
     div_factor_log2 = np.log2(div_factor)
     x_is_float_var = isinstance(x, relay.Var) and x.type_annotation.dtype == 'float32'
 
-    # check if division can be replaced by a right_shift
+    # check if division can be replaced by a right_shift/left_shift
     if not x_is_float_var and \
        div_factor_log2 == np.round(div_factor_log2) and \
        div_factor_log2 >= 0:
@@ -144,6 +154,7 @@ def create_requant(x, div_factor, a_min, a_max, shift_factor_dtype='int32'):
         x = relay.op.right_shift(x, relay.const(shift_factor[0]))
     else:
         x = relay.op.divide(x, relay.const(div_factor))
+        x = relay.op.floor(x)
 
     x = relay.op.clip(x, a_min=a_min, a_max=a_max)
     x = relay.op.cast(x, 'int8')
@@ -155,7 +166,7 @@ class DianaOnnxDigitalRequantRewriter(DFPatternCallback):
     """Rewriter for digital requant pattern
     Rewrite: div -> floor -> max -> min
          to: right_shift -> clip -> cast(int8)
-         or: div -> clip -> cast(int8)
+         or: div -> floor -> clip -> cast(int8)
     """
     def __init__(self, with_div=True, require_type=False):
         super().__init__(require_type)
@@ -281,8 +292,8 @@ class DianaOnnxIntegerize:
     ) -> tvm.ir.IRModule:
         for global_var, func in mod.functions.items():
             func = rewrite(DianaOnnxIntegerizeLinearOps(), func)
+            func = rewrite(DianaOnnxIntegerizeGlobalAvgPool2d(), func)
             func = rewrite(DianaOnnxIntegerizeElementWiseSum(), func)
-            func = rewrite(DianaOnnxMergeDuplicateDiv(), func)
             func = rewrite(DianaOnnxAnalogBnRequantRewriter(), func)
             func = rewrite(DianaOnnxDigitalRequantRewriter(with_div=True), func)
             func = rewrite(DianaOnnxDigitalRequantRewriter(with_div=False), func)
