@@ -454,9 +454,10 @@ def create_demo_file(model: TVMCModel, directory: str = "build",
         f'    }}\n' + \
         f'  }}\n\n'
 
-    # Generate other intermediate results headers
+    # Generate other intermediate results headers if any
     for k, v in params.items():
-        gen_array_header(k, v)
+        if k.startswith('g_'):
+            gen_array_header(k, v)
 
     mallocs += f"  {output_type_decl} *output = ({output_type_decl}*)malloc_wrapper(output_size * sizeof({output_type_decl}));\n\n"
     frees +=    "  free_wrapper(output);\n"

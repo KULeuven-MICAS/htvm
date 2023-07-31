@@ -6,6 +6,7 @@ import mlperf_tiny.relay_dae
 import pytest
 import tvm
 import tvm.relay as relay
+import pudb
 
 from tvm.driver.tvmc.model import TVMCModel
 from typing import Dict
@@ -109,7 +110,7 @@ def test_add(run, tmp_path):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run, tmp_path, no_of_inputs=2)
+    driver(ir_module, params, run, tmp_path)
 
     
 def run_full_network(run, directory, network):
