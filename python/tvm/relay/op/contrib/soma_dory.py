@@ -368,13 +368,9 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
         pipeline.append(SomaDoryLayoutTransform())
 
     pipeline.append(transform.AnnotateTarget(["soma_dory"]))
-    pipeline.append(tvm.transform.PrintIR())
-
-    pipeline.append(tvm.transform.PrintIR())
     pipeline.append(transform.InferType())
     pipeline.append(transform.PartitionGraph())
     pipeline.append(transform.InferType())
-    pipeline.append(tvm.transform.PrintIR())
 
     seq = tvm.transform.Sequential(pipeline)
 

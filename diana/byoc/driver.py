@@ -369,15 +369,12 @@ if __name__ == "__main__":
         ir_module, params = relay.frontend.from_onnx(onnx_model, freeze_params=True)
         # Diana quantlib specific interpretation pass
         ir_module = DianaOnnxIntegerize()(ir_module)
-        print(ir_module)
 
         # Check if the same folder as args.onnx contains .npy files. If yes, parse them and
         # store them in params
         for fname in pathlib.Path(args.onnx).parent.glob('*.npy'):
             param_name = 'g_' + fname.stem
             params[param_name] = np.load(fname)
-
-        print(ir_module)
 
     elif args.network is not None:
         # Defaults
