@@ -166,8 +166,8 @@ class DianaDriver(Driver):
         utils.create_build_dir(self.byoc_path, self.build_dir, self.device)
         utils.copy_dory_files(dory_path, self.build_dir)
 
-    def tvm_compile(self, 
-                    target: str = "soma_dory -requant_transform=0, c",
+    def tvm_compile(self,
+                    target: str = "soma_dory, c",
                     fusion: bool = True,
                     indefinite: bool = False,
                     boot_analog: bool = False,
@@ -277,7 +277,7 @@ def driver(mod: tvm.ir.IRModule,
     # Create the model library format file and unpack
     d_diana = DianaDriver(mod, params, build_dir=build_dir,
                           byoc_path=byoc_path)
-    d_diana.tvm_compile(fusion=True)
+    d_diana.tvm_compile(fusion=True, target="soma_dory -layout_transform=0, c")
     d_diana.add_profiler(measurement="global")
     d_diana.gcc_compile(gcc_opt=3)
     # Make for DIANA
@@ -379,7 +379,7 @@ if __name__ == "__main__":
     elif args.network is not None:
         # Defaults
         args.device = "pulp"
-        args.target = "soma_dory -layout_transform=0 -requant_transform=0, c"
+        args.target = "soma_dory -layout_transform=0, c"
         args.measurement = "global"
         args.fusion = True
         args.gcc_opt = 3
@@ -393,7 +393,7 @@ if __name__ == "__main__":
             add_layout_transforms = False
         if args.configuration == "analog":
             # Disable digital accelerator pattern matching
-            args.target = "soma_dory -layout_transform=0 -disable_digital_acc=1 -requant_transform=0, c"
+            args.target = "soma_dory -layout_transform=0 -disable_digital_acc=1, c"
             args.boot_analog = True
             weight_bits = 2
         if args.configuration == "mixed":

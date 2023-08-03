@@ -151,6 +151,16 @@ REQUIREMENTS_BY_PIECE: RequirementsByPieceType = [
         "importer-tflite",
         ("Requirements for the TFLite importer", ["tensorflow", "tensorflow-estimator", "tflite"]),
     ),
+    # SOMA DORY codegen requirements
+    (
+        "soma-dory",
+        (
+            "Requirements for the SOMA DORY codegen",
+            [
+                "networkx",
+            ],
+        ),
+    ),
     (
         "tvmc",
         (
@@ -252,6 +262,7 @@ CONSTRAINTS = [
     ("h5py", "==2.10.0"),
     ("image", None),
     ("matplotlib", None),
+    ("networkx", "==3.1"),
     ("numpy", None),
     ("onnx", None),
     ("onnxoptimizer", None),
