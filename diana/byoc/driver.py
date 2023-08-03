@@ -196,7 +196,9 @@ class DianaDriver(Driver):
         if "soma_dory" in target:
             shutil.copyfile("/tmp/macs_report.txt",self.build_dir/"macs_report.txt")
         utils.create_demo_file(self.model,
-                               directory=self.build_dir)
+                               directory=self.build_dir,
+                               boot_analog=boot_analog)
+
     def gcc_compile(self, gcc_opt: int = 3):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.pulprt", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
@@ -244,6 +246,15 @@ class DianaDriver(Driver):
                             kernels=None,
                             log_file=self.build_dir/"memory.txt",
                             csv_file=self.build_dir/"memory.csv")
+        size_dict = utils.size_pulp(binary=self.build_dir/
+                                    "pulpissimo/demo/demo")
+        print("\n")
+        print("----- L2 STATIC MEMORY USAGE ----")
+        for key, value in size_dict.items():
+            print(f"{key:10}: {value:8,} Bytes   " +\
+                    f"({round(float(value)/1000):4} kB)")
+        print("\n")
+
     def run(self):
         result = utils.gdb(device=self.device, 
                            binary="pulpissimo/demo/demo",
@@ -368,7 +379,7 @@ if __name__ == "__main__":
     elif args.network is not None:
         # Defaults
         args.device = "pulp"
-        args.target = "soma_dory layout_transform=0 -requant_transform=0, c"
+        args.target = "soma_dory -layout_transform=0 -requant_transform=0, c"
         args.measurement = "global"
         args.fusion = True
         args.gcc_opt = 3
@@ -379,12 +390,16 @@ if __name__ == "__main__":
         # overriding defaults
         if args.configuration == "cpu":
             args.target = "c"
+            add_layout_transforms = False
         if args.configuration == "analog":
+            # Disable digital accelerator pattern matching
+            args.target = "soma_dory -layout_transform=0 -disable_digital_acc=1 -requant_transform=0, c"
             args.boot_analog = True
             weight_bits = 2
         if args.configuration == "mixed":
             args.boot_analog = True
             mixed = True
+            weight_bits = 2
         if args.network == "ds_cnn":
             network_model = mlperf_tiny.relay_ds_cnn.create_model
         elif args.network == "mobilenet":
@@ -416,6 +431,8 @@ if __name__ == "__main__":
         options_string = f"{args.device}_{target_name}_{fusion_name}" + \
                    f"_O{args.gcc_opt}_{args.measurement}"
         # in case a default experiment is chosen
+        if args.configuration is not None:
+            options_string = args.configuration + "_" + options_string
         if args.network is not None:
             return args.network + "_" + options_string
         # otherwise

@@ -454,9 +454,10 @@ def create_demo_file(model: TVMCModel, directory: str = "build",
         f'    }}\n' + \
         f'  }}\n\n'
 
-    # Generate other intermediate results headers
+    # Generate other intermediate results headers if any
     for k, v in params.items():
-        gen_array_header(k, v)
+        if k.startswith('g_'):
+            gen_array_header(k, v)
 
     mallocs += f"  {output_type_decl} *output = ({output_type_decl}*)malloc_wrapper(output_size * sizeof({output_type_decl}));\n\n"
     frees +=    "  free_wrapper(output);\n"
@@ -718,7 +719,13 @@ def get_gdb_output(gdb_log_path="debug/gdb.txt"):
         # makes a list of numbers in string format
         list_numbers = string.split(",")
         # convert strings to integers
-        values = [float(number) for number in list_numbers]
+        values = []
+        for number in list_numbers:
+            # NaNs in gdb are displayed as "nan(0x234...)"
+            if "nan" in number:
+                values.append(float("nan"))
+            else:
+                values.append(float(number))
     values_from_test = np.array(values, dtype="float")
     # Values are returned from GDB in one big one-dimensional tensor
     # Reshaping here such that it matches the output

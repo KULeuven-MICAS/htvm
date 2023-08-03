@@ -1,59 +1,74 @@
-<!--- Licensed to the Apache Software Foundation (ASF) under one -->
-<!--- or more contributor license agreements.  See the NOTICE file -->
-<!--- distributed with this work for additional information -->
-<!--- regarding copyright ownership.  The ASF licenses this file -->
-<!--- to you under the Apache License, Version 2.0 (the -->
-<!--- "License"); you may not use this file except in compliance -->
-<!--- with the License.  You may obtain a copy of the License at -->
+# HTVM
+ _Efficient Neural Network Deployment on Heterogenous TinyML Platforms_
 
-<!---   http://www.apache.org/licenses/LICENSE-2.0 -->
+![CI](https://github.com/KULeuven-MICAS/htvm/actions/workflows/ci.yml/badge.svg)
 
-<!--- Unless required by applicable law or agreed to in writing, -->
-<!--- software distributed under the License is distributed on an -->
-<!--- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY -->
-<!--- KIND, either express or implied.  See the License for the -->
-<!--- specific language governing permissions and limitations -->
-<!--- under the License. -->
-Sirius fork of TVM
-------------------
-This is a fork of the tvm project at https://github.com/apache/tvm on commit  2af3ab1e36e0e78bac8448a0357abee317fabb1f
 
-Sirius-specific files and documentation are covered in the `sirius` folder.
+HTVM is a deep learning compiler for deploying neural networks on heterogeneous embedded compute platforms with multiple scratchpad-managed accelerators.
+HTVM generates self-contained C code that runs and dispatches neural network layers to either the platform's CPU, or one of it's accelerators.
 
----
-<img src=https://raw.githubusercontent.com/apache/tvm-site/main/images/logo/tvm-logo-small.png width=128/> Open Deep Learning Compiler Stack
-==============================================
-[Documentation](https://tvm.apache.org/docs) |
-[Contributors](CONTRIBUTORS.md) |
-[Community](https://tvm.apache.org/community) |
-[Release Notes](NEWS.md)
+To do this, HTVM mainly relies on:
+* [Apache TVM](https://github.com/apache/tvm) to generate CPU kernels, and run different layers sequentially.
+* [DORY](https://github.com/pulp-platform/dory) to generate accelerator kernels with optimized scratchpad memory management.
 
-[![Build Status](https://ci.tlcpack.ai/buildStatus/icon?job=tvm/main)](https://ci.tlcpack.ai/job/tvm/job/main/)
-[![WinMacBuild](https://github.com/apache/tvm/workflows/WinMacBuild/badge.svg)](https://github.com/apache/tvm/actions?query=workflow%3AWinMacBuild)
+## Requirements
 
-Apache TVM is a compiler stack for deep learning systems. It is designed to close the gap between the
-productivity-focused deep learning frameworks, and the performance- and efficiency-focused hardware backends.
-TVM works with deep learning frameworks to provide end to end compilation to different backends.
+HTVM has many requirements, and due to the complex setup requirements we generally advise against installing locally.
+It is recommended to use the container approach instead.
+To use the container approach you need:
+* Docker or Podman
 
-License
--------
-TVM is licensed under the [Apache-2.0](LICENSE) license.
+HTVM mainly requires on the following:
 
-Getting Started
----------------
-Check out the [TVM Documentation](https://tvm.apache.org/docs/) site for installation instructions, tutorials, examples, and more.
-The [Getting Started with TVM](https://tvm.apache.org/docs/tutorial/introduction.html) tutorial is a great
-place to start.
+* TVM (contained in this repository) and tools to compile TVM.
+* [DORY](https://github.com/pulp-platform/dory) version `8a0fe7bcadb207c6d80820a4bd2c2f2c0e823248`
+* Python 3.8
 
-Contribute to TVM
------------------
-TVM adopts apache committer model, we aim to create an open source project that is maintained and owned by the community.
-Check out the [Contributor Guide](https://tvm.apache.org/docs/contribute/).
+For DIANA, HTVM also requires:
+* The adapted [PULP-SDK for DIANA](https://github.com/dianaKUL/pulp-sdk-diana)
+* DORY Backend [kernels for DIANA](https://github.com/Aburrello/dory-hal)
+* The [PULP RISC-V GNU Toolchain](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain/)
 
-Acknowledgement
----------------
-We learned a lot from the following projects when building TVM.
-- [Halide](https://github.com/halide/Halide): Part of TVM's TIR and arithmetic simplification module
-  originates from Halide. We also learned and adapted some part of lowering pipeline from Halide.
-- [Loopy](https://github.com/inducer/loopy): use of integer set analysis and its loop transformation primitives.
-- [Theano](https://github.com/Theano/Theano): the design inspiration of symbolic scan operator for recurrence.
+People who still wish to install locally, should take a look at this [Dockerfile](https://github.com/KULeuven-MICAS/htvm/blob/main/diana/docker/Dockerfile.tvm).
+
+## Running HTVM inside of a container
+
+This approach provides builds a container in which all requirements are installed and only requires you to build HTVM before you can get started. Here we use podman, but the instructions should also work with docker.
+
+
+```sh
+git clone --recursive https://github.com/KULeuven-MICAS/htvm
+cd htvm
+podman build . -f diana/docker/Dockerfile.tvm -t tvm-fork
+```
+After the container is created you can proceed with building the compiler (this only has to be done once):
+```sh
+podman run -itv=`pwd`:/tvm-fork:z tvm-fork
+mkdir build
+cp diana/config.cmake build
+cd build
+cmake ..
+make -j$(nproc)
+cd ..
+```
+Now you should be able to run the tests from inside the container
+```sh
+cd diana/byoc
+pytest -v test.py
+```
+The HTVM compiler driver is now also available inside the container:
+```sh
+python3 /tvm-fork/diana/byoc/driver.py -h
+```
+
+## Project Status
+
+HTVM currently supports deploying several neural networks on the [Diana heterogeneous SoC](https://doi.org/10.1109/ISSCC42614.2022.9731716).
+A front-end with support for ingesting quantized neural networks from [Quantlib](https://github.com/pulp-platform/quantlib/) is work-in-progress.
+
+## License
+
+HTVM is Apache 2.0 Licensed.
+## Acknowledgements
+
+This repository started off as a fork of the [Apache TVM project](https://github.com/apache/tvm) on commit  `2af3ab1e36e0e78bac8448a0357abee317fabb1f` but was rebased on upstream several times.
