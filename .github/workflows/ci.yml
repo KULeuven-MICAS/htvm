@@ -42,11 +42,13 @@ jobs:
           push: true
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
+    outputs:
+      container_tag: $${{ steps.meta.outputs.tags }}
   
   build-htvm-release:
     runs-on: ubuntu-latest
     container:
-      image: 'ghcr.io/kuleuven-micas/htvm:main'
+      image: 'ghcr.io/kuleuven-micas/htvm:{{ needs.build_container.outputs.CONTAINER_TAG}}'
     needs: build-container
     steps:
       - name: Checkout repository
@@ -70,8 +72,8 @@ jobs:
   test-htvm-unit:
     runs-on: ubuntu-latest
     container:
-      image: 'ghcr.io/kuleuven-micas/htvm:main'
-    needs: build-htvm-release
+      image: 'ghcr.io/kuleuven-micas/htvm:{{ needs.build_container.outputs.CONTAINER_TAG}}'
+    needs: [build-container, build-htvm-release]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -91,8 +93,8 @@ jobs:
   test-htvm-e2e:
     runs-on: ubuntu-latest
     container:
-      image: 'ghcr.io/kuleuven-micas/htvm:main'
-    needs: build-htvm-release
+      image: 'ghcr.io/kuleuven-micas/htvm:{{ needs.build_container.outputs.CONTAINER_TAG}}'
+    needs: [build-container, build-htvm-release]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
