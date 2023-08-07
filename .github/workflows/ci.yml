@@ -43,12 +43,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           tags: ${{ steps.meta.outputs.tags }}
     outputs:
-      container_tag: ${{ steps.meta.outputs.tags }}
+      container_name: ${{ steps.meta.outputs.tags }}
   
   build-htvm-release:
     runs-on: ubuntu-latest
-    container:
-      image: 'ghcr.io/kuleuven-micas/htvm:${{ needs.build_container.outputs.container_tag}}'
     needs: build-container
     steps:
       - name: Checkout repository
@@ -56,13 +54,20 @@ jobs:
         with:
           submodules: True
       - name: Build HTVM Release
-        run: |
-          mkdir build
-          cp diana/config.cmake build
-          cd build
-          cmake ..
-          make -j$(nproc)
-          cd ..
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ needs.build_container.outputs.container_name}}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          options: -v ${{ github.workspace }}:/tvm-fork
+          run: |
+            mkdir build
+            cp diana/config.cmake build
+            cd build
+            cmake ..
+            make -j$(nproc)
+            cd ..
       - name: Store HTVM Build
         uses: actions/upload-artifact@v3
         with:
@@ -71,8 +76,6 @@ jobs:
 
   test-htvm-unit:
     runs-on: ubuntu-latest
-    container:
-      image: 'ghcr.io/kuleuven-micas/htvm:${{ needs.build_container.outputs.container_tag}}'
     needs: [build-container, build-htvm-release]
     steps:
       - name: Checkout repository
@@ -85,15 +88,21 @@ jobs:
           name: build
           path: build
       - name: Run unit tests
-        run: |
-          export TVM_HOME=`pwd`
-          export PYTHONPATH=$PYTHONPATH:`pwd`/python
-          pytest tests/python/contrib/test_soma_dory
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ needs.build_container.outputs.container_name}}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          options: -v ${{ github.workspace }}:/tvm-fork
+          run: |
+             export TVM_HOME=`pwd`
+             export PYTHONPATH=$PYTHONPATH:`pwd`/python
+             pytest tests/python/contrib/test_soma_dory
+       
 
   test-htvm-e2e:
     runs-on: ubuntu-latest
-    container:
-      image: 'ghcr.io/kuleuven-micas/htvm:${{ needs.build_container.outputs.container_tag}}'
     needs: [build-container, build-htvm-release]
     steps:
       - name: Checkout repository
@@ -106,9 +115,16 @@ jobs:
           name: build
           path: build
       - name: Run end-to-end tests
-        run: |
-          export TVM_HOME=`pwd`
-          export PYTHONPATH=$PYTHONPATH:`pwd`/python
-          cd diana/byoc
-          echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
-          pytest -v test.py
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ needs.build_container.outputs.container_name}}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          options: -v ${{ github.workspace }}:/tvm-fork
+          run: |
+            export TVM_HOME=`pwd`
+            export PYTHONPATH=$PYTHONPATH:`pwd`/python
+            cd diana/byoc
+            echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
+            pytest -v test.py
