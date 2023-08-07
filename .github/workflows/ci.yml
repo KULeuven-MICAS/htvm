@@ -62,12 +62,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           options: -v ${{ github.workspace }}:/tvm-fork
           run: |
-            mkdir build
-            cp diana/config.cmake build
-            cd build
-            cmake ..
-            make -j`nproc`
-            cd ..
+              mkdir build
+              cp diana/config.cmake build
+              cd build
+              cmake ..
+              make -j$(nproc)
+              cd ..
       - name: Store HTVM Build
         uses: actions/upload-artifact@v3
         with:
@@ -96,9 +96,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           options: -v ${{ github.workspace }}:/tvm-fork
           run: |
-             export TVM_HOME=`pwd`
-             export PYTHONPATH=$PYTHONPATH:`pwd`/python
-             pytest tests/python/contrib/test_soma_dory
+              export TVM_HOME=`pwd`
+              export PYTHONPATH=$PYTHONPATH:`pwd`/python
+              pytest tests/python/contrib/test_soma_dory
        
 
   test-htvm-e2e:
@@ -123,8 +123,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           options: -v ${{ github.workspace }}:/tvm-fork
           run: |
-            export TVM_HOME=`pwd`
-            export PYTHONPATH=$PYTHONPATH:`pwd`/python
-            cd diana/byoc
-            echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
-            pytest -v test.py
+              export TVM_HOME=`pwd`
+              export PYTHONPATH=$PYTHONPATH:`pwd`/python
+              cd diana/byoc
+              echo "Dory version is "`git --git-dir /dory/.git rev-parse HEAD`
+              pytest -v test.py
