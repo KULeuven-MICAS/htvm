@@ -64,10 +64,10 @@ jobs:
           run: |
               mkdir build
               cp diana/config.cmake build
-              cd build
-              cmake ..
-              make -j$(nproc)
-              cd ..
+          # cd build
+          #    cmake ..
+          #    make -j$(nproc)
+          #    cd ..
       - name: Store HTVM Build
         uses: actions/upload-artifact@v3
         with:
