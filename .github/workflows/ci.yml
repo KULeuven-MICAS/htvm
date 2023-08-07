@@ -56,7 +56,7 @@ jobs:
       - name: Build HTVM Release
         uses: addnab/docker-run-action@v3
         with:
-          image: ${{ needs.build_container.outputs.container_name}}
+          image: ${{ needs.build_container.outputs.container_name }}
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
             cp diana/config.cmake build
             cd build
             cmake ..
-            make -j$(nproc)
+            make -j`nproc`
             cd ..
       - name: Store HTVM Build
         uses: actions/upload-artifact@v3
@@ -90,7 +90,7 @@ jobs:
       - name: Run unit tests
         uses: addnab/docker-run-action@v3
         with:
-          image: ${{ needs.build_container.outputs.container_name}}
+          image: ${{ needs.build_container.outputs.container_name }}
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -117,7 +117,7 @@ jobs:
       - name: Run end-to-end tests
         uses: addnab/docker-run-action@v3
         with:
-          image: ${{ needs.build_container.outputs.container_name}}
+          image: ${{ needs.build_container.outputs.container_name }}
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
