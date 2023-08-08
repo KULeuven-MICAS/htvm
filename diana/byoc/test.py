@@ -6,7 +6,6 @@ import mlperf_tiny.relay_dae
 import pytest
 import tvm
 import tvm.relay as relay
-import pudb
 
 from tvm.driver.tvmc.model import TVMCModel
 from typing import Dict
