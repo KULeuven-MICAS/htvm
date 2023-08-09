@@ -152,7 +152,7 @@ def _check_biasadd_requant(pattern):
 
     bias_add = right_shift_input
 
-    # We can safely assumer bias is present since pattern matcher expects this
+    # We can safely assume bias is present since pattern matcher expects this
     # Check bias dtype
     bias_dtype = bias_add.args[1].checked_type.dtype
     if bias_dtype != 'int32':

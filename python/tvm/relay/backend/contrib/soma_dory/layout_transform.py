@@ -24,6 +24,23 @@ from tvm.relay import transform
 from tvm.relay.expr_functor import ExprMutator, ExprVisitor
 
 
+def show_graph(g):
+    """Useful for visualizing networkx graphs
+    g:  networkx graph
+    """
+    import matplotlib.pyplot as plt
+
+    pos = nx.spring_layout(g, scale=2)
+    plt.figure(figsize=(12, 12))
+    nx.draw(g, pos, node_size=1000)
+    node_labels = nx.get_node_attributes(g, 'layout')
+    nx.draw_networkx_labels(g, pos, labels=node_labels)
+    edge_labels = nx.get_edge_attributes(g, 'tfm')
+    edge_labels = {k:('tfm' if v else '') for k, v in edge_labels.items()}
+    nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels)
+    plt.show()
+
+
 def create_layout_transform(x, shape):
     """Create soma_dory layout transform from 'reshape -> reverse -> reshape' op sequence
     """
@@ -52,7 +69,7 @@ def calculate_transforms(g):
             toggle_tfms(g, all_edges(g, node))
 
     # optimize transforms around 'x' nodes (don't care), this part is usefull for residual networks
-    for i in range(10):    # do multiple iterations, but set an upper limit to avoid infinite loop
+    for i in range(10):    # do multiple iterations, but set an upper limit to avoid an infinite loop
         improvements_made = False
         for node, data in g.nodes(data=True):
             if data['layout'] != 'x':
@@ -65,13 +82,6 @@ def calculate_transforms(g):
             if sum(edge_tfms) > len(edges) // 2:
                 toggle_tfms(g, edges)
                 improvements_made = True
-
-            # if all inputs contain a tfm, move them to the outputs
-            # Commented this out, not sure anymore why this was usefull
-            #edge_in_tfms = [g.edges[edge]['tfm'] for edge in g.in_edges(node)]
-            #if sum(edge_in_tfms) == len(edge_in_tfms):
-            #    toggle_tfms(g, edges)
-            #    improvements_made = True
 
         if not improvements_made:
             # optimization complete
@@ -193,19 +203,6 @@ class InsertLayoutTransforms(ExprMutator):
             new_args.append(new_arg)
 
         return relay.Call(new_fn, new_args, call.attrs, call.type_args, call.span)
-
-
-#import matplotlib.pyplot as plt
-#def show_graph(g):
-#    pos = nx.spring_layout(g, scale=2)
-#    plt.figure(figsize=(12, 12))
-#    nx.draw(g, pos, node_size=1000)
-#    node_labels = nx.get_node_attributes(g, 'layout')
-#    nx.draw_networkx_labels(g, pos, labels=node_labels)
-#    edge_labels = nx.get_edge_attributes(g, 'tfm')
-#    edge_labels = {k:('tfm' if v else '') for k, v in edge_labels.items()}
-#    nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels)
-#    plt.show()
 
 
 @tvm.ir.transform.module_pass(opt_level=0)

@@ -371,8 +371,10 @@ if __name__ == "__main__":
         ir_module = DianaOnnxIntegerize()(ir_module)
 
         # Check if the same folder as args.onnx contains .npy files. If yes, parse them and
-        # store them in params
+        # store them in params. These are later used in create_demo_file
         for fname in pathlib.Path(args.onnx).parent.glob('*.npy'):
+            # We add `g_` as prefix to avoid TVM from treating them as model constants
+            # than can be constant-folded if their name matches a variable in the IR module
             param_name = 'g_' + fname.stem
             params[param_name] = np.load(fname)
 

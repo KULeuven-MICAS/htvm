@@ -354,10 +354,24 @@ def create_demo_file(model: TVMCModel, directory: str = "build",
                      use_printf: bool = False):
     '''
     Function that creates a demo file in which inputs and outputs of the
-    right size are allocated and setup automatically. Based on:
+    right size are allocated and setup automatically.
 
-    https://discuss.tvm.apache.org/t/
-    how-to-get-the-input-and-output-of-relay-call-node/8743
+    model:  TVMCModel containing both the IRModule and the parameters dict. If the parameters
+            dict contains NDArray constants with names starting with `g_`, each constant is
+            converted to a C-array and embedded in its own header file.
+            If a constant for example is named `g_input` and the model's input is named `input`
+            (same name but without the `g_`), than its header file is included in demo.c and
+            the C-array is used as input for the model. If also `g_output` is available,
+            the actual output of the model is asserted against `g_output`.
+            This way, the numeric correctness of the compiled model can be verified.
+            If no constants starting with `g_` are available in the params dict,
+            the model's input is initialized with zeros and the output is not asserted.
+    indefinite:     Run the model in a while(1) loop. This is useful for power measurement.
+    boot_analog:    Insert code to boot the analog core.
+    use_printf:     Print out assertion failures with printf. If False, nothing will be printed.
+
+    Reference on how to obtain model input/output details:
+    https://discuss.tvm.apache.org/t/how-to-get-the-input-and-output-of-relay-call-node/8743
     '''
     mod = model.mod
     params = model.params
@@ -454,7 +468,8 @@ def create_demo_file(model: TVMCModel, directory: str = "build",
         f'    }}\n' + \
         f'  }}\n\n'
 
-    # Generate other intermediate results headers if any
+    # Generate other intermediate results headers if any. Those are not included in demo.c
+    # but can be useful for manual debugging when the output is not as expected.
     for k, v in params.items():
         if k.startswith('g_'):
             gen_array_header(k, v)
