@@ -175,7 +175,7 @@ class DianaDriver(Driver):
         utils.copy_dory_files(dory_path, self.build_dir)
 
     def tvm_compile(self, 
-                    target: str = "soma_dory -requant_transform=0, c",
+                    target: str = "soma_dory -requant_transform=0 -layout_transform=0, c",
                     fusion: bool = True,
                     init_value: int = 1,
                     indefinite: bool = False,
