@@ -20,6 +20,7 @@ Operations to support the SOMA accelerator.
 
 import tvm
 import logging
+import numpy as np
 from functools import partial
 
 from tvm.relay import transform
@@ -31,7 +32,7 @@ from ...dataflow_pattern import wildcard, is_op, is_constant, is_expr
 # don't remove this import even if it does not seem to be used
 # because this is the point where the soma_dory backend is registered
 import tvm.relay.backend.contrib.soma_dory
-from tvm.relay.backend.contrib.soma_dory.transform import DianaOnnxRequantTransform, DianaOnnxIntegerize, SomaDoryLayoutTransform
+from tvm.relay.backend.contrib.soma_dory.layout_transform import SomaDoryLayoutTransform
 
 
 logger = logging.getLogger("SomaDory")
@@ -52,12 +53,28 @@ def _biasadd_requant_pattern(linear_op):
     return _requant_pattern(bias_add)
 
 
-def conv2d_pattern():
-    """Create pattern for conv2D with optional fused relu."""
+def _analog_bn_requant_pattern(prev_op):
+    """Add analog batchnorm and requant pattern
+       (cast -> div -> floor -> clip -> cast -> mul -> add -> right_shift -> clip -> cast)
+    """
+    cast1 = is_op("cast")(prev_op).has_attr({"dtype": "float32"})
+    div = is_op("divide")(cast1, is_constant())
+    floor = is_op("floor")(div)
+    clip = is_op("clip")(floor)
+    cast2 = is_op("cast")(clip).has_attr({"dtype": "int16"})
+    mul = is_op("multiply")(cast2, is_constant())
+    add = is_op("add")(mul, is_constant())
+    return _requant_pattern(add)
 
-    conv2d = is_op("nn.conv2d")(
-            wildcard(), wildcard()
-    )
+
+def conv2d_pattern(is_analog):
+    """Create pattern for conv2D with optional bias and requantization"""
+
+    conv2d = is_op("nn.conv2d")(wildcard(), wildcard())
+
+    if is_analog:
+        return _analog_bn_requant_pattern(conv2d)
+
     return _biasadd_requant_pattern(conv2d)
 
 
@@ -81,7 +98,7 @@ def element_wise_add_pattern():
 
 def _check_requant(pattern):
     """Check if requant pattern is supported by the soma dory accelerator
-    Returns None if not supported, returns the op before this sequence if supported
+    Returns None if not supported, returns the op before this sequence, if supported
     """
     cast = pattern
     right_shift = cast.args[0].args[0]
@@ -89,7 +106,7 @@ def _check_requant(pattern):
     # Check range of shift factor
     shift_factor = right_shift.args[1].data.numpy()
     if shift_factor < 0 or shift_factor > 31:
-        logger.warning("shift factor of accelerator operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported.")
+        logger.warning(f"shift factor of accelerator operation must be in range [0, 31], but got {shift_factor}. Acceleration for this op is not supported.")
         return None
 
     right_shift_input = right_shift.args[0]
@@ -97,22 +114,45 @@ def _check_requant(pattern):
     return right_shift_input
 
 
+def _check_analog_bn_requant(pattern):
+    """Check if analog batchnorm requant pattern is supported by the soma dory accelerator
+    Returns None if not supported, returns the op before this sequence, if supported
+    """
+    right_shift_input = _check_requant(pattern)
+    if right_shift_input is None:
+        return None
+
+    add = right_shift_input
+    # Check add ?
+
+    mul = add.args[0]
+    # Check mul ?
+
+    clip = mul.args[0].args[0]
+    clip_range = [clip.attrs.a_min, clip.attrs.a_max]
+    expected_clip_range = [-32, 31]
+    if clip_range != expected_clip_range:
+        logger.warning(f"Clip range of analog ADC is wrong: expected {expected_clip_range}, but got {clip_range}. Acceleration for this op is not supported.")
+        return None
+
+    div = clip.args[0].args[0]
+    # Check analog gain factor ?
+
+    return div.args[0].args[0]
+
+
 def _check_biasadd_requant(pattern):
     """Check if bias_add-requant pattern is supported by the soma dory accelerator
-    Returns None if not supported, returns the linear op before this sequence if supported
+    Returns None if not supported, returns the linear op before this sequence, if supported
     """
 
     right_shift_input = _check_requant(pattern)
     if right_shift_input is None:
         return None
 
-    # For now, we don't support linears without bias
-    if str(right_shift_input.op.name) not in ["nn.bias_add", "add"]:
-        logger.warning("Found conv/dense op without nn.bias_add. Acceleration for this op is not supported.")
-        return None
-
     bias_add = right_shift_input
 
+    # We can safely assume bias is present since pattern matcher expects this
     # Check bias dtype
     bias_dtype = bias_add.args[1].checked_type.dtype
     if bias_dtype != 'int32':
@@ -121,19 +161,10 @@ def _check_biasadd_requant(pattern):
 
     return bias_add.args[0]
 
+def _check_conv2d(conv2d, is_analog):
+    """Check Conv2d attributes requirements"""
 
-def check_conv2d(pattern, supported_weight_bits=[8, 2]):
-    """Check if the Conv2D is supported by the soma dory accelerator"""
-
-    conv2d = _check_biasadd_requant(pattern)
-    if conv2d is None:
-        return False
-
-    num_output_channels = conv2d.args[1].data.shape[0]
-    # Don't offload grouped analog convolutions
-    if conv2d.args[1].checked_type.dtype == "int2":
-        if conv2d.attrs['groups'] != 1:
-            return False
+    core_type_str = "analog" if is_analog else "digital"
 
     def is_conv2d_attr_value_supported(attrs, name, supported_values):
         attr = attrs[name]
@@ -142,7 +173,7 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
             attr = list(attr)
 
         if attr not in supported_values:
-            logger.warning(f"Expected nn.conv2d {name} to be one of {supported_values}, but got {attr}. " +\
+            logger.warning(f"Expected {core_type_str} nn.conv2d {name} to be one of {supported_values}, but got {attr}. " +\
                             "Acceleration for this op is not supported.")
             return False
 
@@ -154,7 +185,7 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
         kernel_w = kernel_size[1]
         supported_kernels = [1, 3, 5, 7]
         if (kernel_h not in supported_kernels) or (kernel_w not in supported_kernels):
-            logger.warning(f"Expected nn.conv2d kernel width and height to be one of {supported_kernels}, " +\
+            logger.warning(f"Expected {core_type_str} nn.conv2d kernel width and height to be one of {supported_kernels}, " +\
                            f"but got {kernel_size}. " +\
                             "Acceleration for this op is not supported.")
             return False
@@ -163,7 +194,7 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
         padding = list(attrs["padding"])
         # Only support equal left-right and top-bottom padding
         if (padding[0] != padding[2]) or (padding[1] != padding[3]):
-            logger.warning(f"Expected equal top and bottom padding, and equal left and right padding," +\
+            logger.warning(f"Expected {core_type_str} nn.conv2d to have equal top and bottom padding, and equal left and right padding," +\
                            f"but got {[padding[0], padding[2]]} and {[padding[1], padding[3]]}, respectively. " +\
                             "Acceleration for this op is not supported.")
             return False
@@ -172,7 +203,7 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
         if (kernel_w - 2*padding[1] != 1) and (kernel_h - 2*padding[0] != 1):
             expected_pad = [(kernel_w - 1) // 2, (kernel_h - 1) // 2]
             logger.warning(f"Accelerator only supports 'SAME' padding. " +\
-                           f"Expected nn.conv2d with kernel size {kernel_size} to have padding {expected_pad}, " +\
+                           f"Expected {core_type_str} nn.conv2d with kernel size {kernel_size} to have padding {expected_pad}, " +\
                            f"but got {padding[:2]}.")
             return False
 
@@ -180,27 +211,77 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
 
 
     # check conv2d attributes
+    num_output_channels = conv2d.args[1].data.shape[0]
+    supported_groups = [1] if is_analog else [1, num_output_channels]
     if (not is_filter_and_padding_supported(conv2d.attrs)
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'strides', [[1, 1], [2, 2]])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'dilation', [[1, 1]])
-        or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', [1, num_output_channels])
+        or not is_conv2d_attr_value_supported(conv2d.attrs, 'groups', supported_groups)
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'kernel_layout', ['OIHW'])
         or not is_conv2d_attr_value_supported(conv2d.attrs, 'data_layout', ['NCHW'])):
 
         return False
 
-    #conv2d_input = conv2d.args[0]
     conv2d_weight = conv2d.args[1]
-
     weights_dtype = conv2d_weight.data.dtype
-    if not weights_dtype.startswith('int'):
-        logger.warning(f"Expected Conv2D weights to be of integer type, got {weights_dtype}. \
-                        Acceleration for this conv2d is not supported")
+    if not weights_dtype == 'int8':
+        logger.warning(f"Expected {core_type_str} Conv2D weights data type to be int8, got {weights_dtype}. " +\
+                        "Acceleration for this conv2d is not supported")
         return False
 
-    if int(weights_dtype[3:]) not in supported_weight_bits:
-        logger.warning(f"Expected Conv2D weight bit-depth to be in {supported_weight_bits}. \
-                        Acceleration for this op is not supported")
+    return True
+
+def _check_activation_shape(pattern, op_name, io_str):
+    """The accelerator processes elements by four.
+    Therefore the the tensor input/output size must be divisible by four.
+    """
+    tensor_shape = pattern.checked_type.shape
+    if (np.prod(tensor_shape) % 4) != 0:
+        logger.warning(f"Expected {io_str} tensor size to be divisible by 4, got {tensor_shape}. " +\
+                       f"Acceleration for this {op_name} is not supported")
+        return False
+    return True
+
+
+def check_conv2d(pattern):
+    """Check if the Conv2D is supported by the soma dory accelerator"""
+
+    if not _check_activation_shape(pattern, 'conv2d', 'output'):
+        return False
+
+    conv2d = _check_biasadd_requant(pattern)
+    if conv2d is None:
+        return False
+
+    if not _check_conv2d(conv2d, False):
+        return False
+
+    if not _check_activation_shape(conv2d.args[0], 'conv2d', 'input'):
+        return False
+
+    return True
+
+def check_analog_conv2d(pattern):
+    """Check if the analog Conv2D is supported by the soma dory accelerator"""
+
+    if not _check_activation_shape(pattern, 'aconv2d', 'output'):
+        return False
+
+    conv2d = _check_analog_bn_requant(pattern)
+    if conv2d is None:
+        return False
+
+    if not _check_conv2d(conv2d, True):
+        return False
+
+    # Verify max and min weight values
+    w = conv2d.args[1].data.numpy()
+    if w.min() < -1 or w.max() > 1:
+        logger.warning(f"Expected analog Conv2D weights to be in range [-1, 1], but got {[w.min(), w.max()]}. " +\
+                        "Acceleration for this conv2d is not supported")
+        return False
+
+    if not _check_activation_shape(conv2d.args[0], 'aconv2d', 'input'):
         return False
 
     return True
@@ -209,6 +290,9 @@ def check_conv2d(pattern, supported_weight_bits=[8, 2]):
 def check_fully_connected(pattern):
     """Check if the fully connected layer is supported by the soma dory accelerator"""
 
+    if not _check_activation_shape(pattern, 'dense', 'output'):
+        return False
+
     fc = _check_biasadd_requant(pattern)
     if fc is None:
         return False
@@ -216,12 +300,16 @@ def check_fully_connected(pattern):
     #fc_input = fc.args[0]
     #fc_weight = fc.args[1]
 
+    if not _check_activation_shape(fc.args[0], 'dense', 'input'):
+        return False
+
     return True
 
 
-def check_element_wise_add(pattern, supported_weight_bits=[8]):
+def check_element_wise_add(pattern):
     """Check if the element-wise-add layer is supported by the soma dory accelerator"""
-    if 8 not in supported_weight_bits:
+
+    if not _check_activation_shape(pattern, 'add', 'output'):
         return False
 
     add = _check_requant(pattern)
@@ -240,7 +328,7 @@ def check_element_wise_add(pattern, supported_weight_bits=[8]):
     return True
 
 
-def pattern_table(supported_weight_bits_conv2d):
+def pattern_table():
     """
     Registers the patterns we want to match.
     Returns
@@ -249,9 +337,10 @@ def pattern_table(supported_weight_bits_conv2d):
     """
 
     return [
-        ("soma_dory.conv2d", conv2d_pattern(), partial(check_conv2d, supported_weight_bits=supported_weight_bits_conv2d)),
+        ("soma_dory.aconv2d", conv2d_pattern(True), check_analog_conv2d),
+        ("soma_dory.conv2d", conv2d_pattern(False), check_conv2d),
         ("soma_dory.dense", fully_connected_pattern(), check_fully_connected),
-        ("soma_dory.add", element_wise_add_pattern(), partial(check_element_wise_add, supported_weight_bits=supported_weight_bits_conv2d)),
+        ("soma_dory.add", element_wise_add_pattern(), check_element_wise_add),
     ]
 
 
@@ -270,23 +359,15 @@ def partition_for_soma_dory(mod, params=None, dpu=None, **opts):
     if params:
         mod["main"] = bind_params_by_name(mod["main"], params)
 
-    supported_weight_bits_conv2d = [8, 2]
-    if 'disable_digital_acc' in opts and opts['disable_digital_acc'] == '1':
-        supported_weight_bits_conv2d = [2]
-
     pipeline = []
-    if 'requant_transform' not in opts or opts['requant_transform'] != '0':
-        pipeline.append(DianaOnnxRequantTransform())
 
-   
-    pipeline.append(DianaOnnxIntegerize('int8'))
     pipeline.append(transform.InferType())
-    pipeline.append(transform.MergeComposite(pattern_table(supported_weight_bits_conv2d)))
-    pipeline.append(transform.AnnotateTarget(["soma_dory"]))
-
+    pipeline.append(tvm.transform.PrintIR())
+    pipeline.append(transform.MergeComposite(pattern_table()))
     if 'layout_transform' not in opts or opts['layout_transform'] != '0':
         pipeline.append(SomaDoryLayoutTransform())
 
+    pipeline.append(transform.AnnotateTarget(["soma_dory"]))
     pipeline.append(transform.InferType())
     pipeline.append(transform.PartitionGraph())
     pipeline.append(transform.InferType())

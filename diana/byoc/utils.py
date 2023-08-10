@@ -103,6 +103,7 @@ def relay_soma_conv2d(input_tensor: relay.Var, layer_name: str,
                            strides=strides,
                            padding=padding,
                            groups=groups,
+                           kernel_size=w_value.shape[2:],
                            out_dtype=b_value.dtype)
     x = relay.op.nn.bias_add(x, b)
     x = relay.op.right_shift(x, relay.const(shift_bits))
@@ -214,7 +215,7 @@ def create_random_array(shape: Tuple[int, ...], dtype: str) -> tvm.nd.array:
 
 
 def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
-                 fuse_layers: bool = True, 
+                 fuse_layers: bool = True,
                  package_path: pathlib.Path = pathlib.Path("model.tar")):
     '''
     Utility wrapper for TVMC that sets supported
@@ -249,7 +250,7 @@ def tvmc_wrapper(model: TVMCModel, target: str = "soma_dory, c",
 
 def tvmc_compile_and_unpack(model: TVMCModel, target: str = "soma_dory, c",
                             fuse_layers: bool = True,
-                            build_path: str = "./build",
+                            build_path: str = pathlib.Path("./build"),
                             byoc_path: str = ".",
                             device="pulp"):
     '''
@@ -293,20 +294,20 @@ def create_build_dir(byoc_path: str = ".",
     # Copy over other necessary files
     if device == "pulp":
         makefile_pulprt = pathlib.Path("Makefile.pulprt")
-        shutil.copyfile(src=byoc_path / makefile_pulprt, 
+        shutil.copyfile(src=byoc_path / makefile_pulprt,
                         dst=build_path / makefile_pulprt)
     elif device == "x86":
         makefile_x86 = pathlib.Path("Makefile.x86")
-        shutil.copyfile(src=byoc_path / makefile_x86, 
+        shutil.copyfile(src=byoc_path / makefile_x86,
                         dst=build_path / makefile_x86)
     else:
         raise NotImplementedError
     src_dir = pathlib.Path("src")
     include_dir = pathlib.Path("include")
     # Copy over src, include and dory folders
-    shutil.copytree(src=byoc_path / src_dir, 
+    shutil.copytree(src=byoc_path / src_dir,
                     dst=build_path / src_dir, dirs_exist_ok=True)
-    shutil.copytree(src=byoc_path / include_dir, 
+    shutil.copytree(src=byoc_path / include_dir,
                     dst=build_path / include_dir, dirs_exist_ok=True)
 
 
@@ -330,7 +331,7 @@ def copy_dory_files(dory_path: str = "/dory",
                    "digital_fully_connected.c",
                    "encoders_instruction_memory.c",
                    "utils.c"]
-    hal_include_files = ["kernels.h", 
+    hal_include_files = ["kernels.h",
                          "encoders_instruction_memory.h",
                          "utils.h"]
     utils_src_files = ["dory.c",
@@ -345,24 +346,35 @@ def copy_dory_files(dory_path: str = "/dory",
         shutil.copyfile(dory_utils_dir/src, dory_src_dir/src)
     for inc in utils_include_files:
         shutil.copyfile(dory_utils_dir/inc, dory_inc_dir/inc)
-    
 
-def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build", 
-                     init_value: int = 1, indefinite: bool = False, 
-                     no_of_inputs: int = 1,
-                     boot_analog: bool = False):
+
+def create_demo_file(model: TVMCModel, directory: str = "build",
+                     indefinite: bool = False,
+                     boot_analog: bool = False,
+                     use_printf: bool = False):
     '''
     Function that creates a demo file in which inputs and outputs of the
-    right size are allocated and setup automatically. Based on:
+    right size are allocated and setup automatically.
 
-    https://discuss.tvm.apache.org/t/
-    how-to-get-the-input-and-output-of-relay-call-node/8743
+    model:  TVMCModel containing both the IRModule and the parameters dict. If the parameters
+            dict contains NDArray constants with names starting with `g_`, each constant is
+            converted to a C-array and embedded in its own header file.
+            If a constant for example is named `g_input` and the model's input is named `input`
+            (same name but without the `g_`), than its header file is included in demo.c and
+            the C-array is used as input for the model. If also `g_output` is available,
+            the actual output of the model is asserted against `g_output`.
+            This way, the numeric correctness of the compiled model can be verified.
+            If no constants starting with `g_` are available in the params dict,
+            the model's input is initialized with zeros and the output is not asserted.
+    indefinite:     Run the model in a while(1) loop. This is useful for power measurement.
+    boot_analog:    Insert code to boot the analog core.
+    use_printf:     Print out assertion failures with printf. If False, nothing will be printed.
 
-    Note, the no_of_inputs argument currently sets extra inputs.
-    This is for example necessary in the testing of add layers (2 inputs)
-    Beware that this does not include any sanity checking!
-    It just takes the two most upfront inferred types!
+    Reference on how to obtain model input/output details:
+    https://discuss.tvm.apache.org/t/how-to-get-the-input-and-output-of-relay-call-node/8743
     '''
+    mod = model.mod
+    params = model.params
     directory = pathlib.Path(directory)
     def get_c_type(dtype):
         if dtype == "int8":
@@ -371,6 +383,20 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
             return "float"
         else:
             raise NotImplementedError
+
+    def gen_array_header(name: str, value: np.typing.NDArray):
+        c_type = get_c_type(value.dtype)
+        c_code = f"static const {c_type} {name}[] = {{"
+        for v in value.flatten():
+            c_code += f"{v},"
+        c_code += '};\n'
+
+        filename = f"model_{name}.h"
+        with open(directory/"include"/filename, "w") as file:
+            file.writelines(c_code)
+
+        return filename
+
     # Before you can get the input and output types of a relay node
     # you first have to run the InferType Relay pass
     # otherwise checked_type will return a ValueError
@@ -378,50 +404,81 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
     mod = relay.transform.InferType()(mod)
     # Assuming the first arguments are the user-supplied input
     # Convert from TVM runtime datatype to numpy array
-    input_shapes = []
-    input_dtypes = []
-    for i in range(no_of_inputs):
-        input_shapes.append(np.array(mod["main"].checked_type.arg_types[i].shape))
-        input_dtypes.append(mod["main"].checked_type.arg_types[i].dtype)
-    type_decls_in = [get_c_type(dtype) for dtype in input_dtypes]
+    input_params = mod["main"].params
     # Assuming there is only output to this Relay IRMod
     # Convert from TVM runtime datatype to numpy array
     output_shape = np.array(mod["main"].checked_type.ret_type.shape)
     output_dtype = mod["main"].checked_type.ret_type.dtype
     create_demo_gdb_scripts(output_dtype, directory=directory)
-    type_decl_out = get_c_type(output_dtype)
+    output_type_decl = get_c_type(output_dtype)
     if boot_analog:
         analog_boot_include = "#include <utils.h>\n"
         analog_boot_code = "boot_diana();"
     else:
         analog_boot_include = ""
         analog_boot_code = ""
-    print("Creating demo file: Inferred shapes:")
-    for i in range(no_of_inputs):
-        print(f"\tinput ({input_dtypes[i]}):")
-        print(f"\t {input_shapes[i]}")
-    print(f"\toutput ({output_dtype}):")
-    print(f"\t {output_shape}")
+
     mallocs = ""
+    array_header_includes = ""
+    check_code = ""
     frees = ""
     sizes = ""
-    for i, type_d in enumerate(type_decls_in):
-        mallocs += f"  {type_d} *input_{i} = ({type_d}*)malloc_wrapper(input_{i}_size * sizeof({type_d}));\n"
-        frees += f"  free_wrapper(input_{i});\n"
-    mallocs += f"  {type_decl_out} *output = ({type_decl_out}*)malloc_wrapper(output_size * sizeof({type_decl_out}));\n\n"
-    frees += "    free_wrapper(output);\n"
-    inits = f"  // Fill input with {init_value}\n"
-    for i, input_shape in enumerate(input_shapes):
-        sizes += f"  uint32_t input_{i}_size = {np.prod(input_shape)};\n"
-        inits += "  for (uint32_t i = 0; i < input_"+str(i)+"_size; i++){\n"
-        inits += f"    input_{i}[i] = {init_value};\n"
-        inits += "  }\n"
-    sizes += f"  uint32_t output_size = {np.prod(output_shape)};\n\n"
-    call = "  struct tvmgen_default_outputs outputs = { .output = output, };\n"
-    call += "  struct tvmgen_default_inputs inputs = {\n"
-    for i in range(len(input_shapes)):
-        call += f"    .input_{i} = input_{i},\n"
-    call += "  };\n\n"
+    call =   "  struct tvmgen_default_outputs outputs = { .output = output, };\n"
+    call +=  "  struct tvmgen_default_inputs inputs = {\n"
+    inits = f"  // Load input data\n"
+
+    all_inputs_known = True
+    for input_param in input_params:
+        input_type_decl = get_c_type(input_param.type_annotation.dtype)
+        input_shape = input_param.type_annotation.shape
+        input_name = input_param.name_hint.replace(':', '_')
+        sizes +=   f"  const uint32_t {input_name}_size = {np.prod(input_shape)};\n"
+        mallocs += f"  {input_type_decl} *{input_name} = ({input_type_decl}*)malloc_wrapper({input_name}_size * sizeof({input_type_decl}));\n"
+        inits +=   f"  for (uint32_t i = 0; i < {input_name}_size; i++){{\n"
+        # check if input tensor has parameter values stored in params, if so, init with these values, otherwise initialize with zero
+        params_input_name = 'g_' + input_name
+        if params_input_name in params.keys():
+            input_value = params[params_input_name]
+            filename = gen_array_header(params_input_name, input_value)
+            del params[params_input_name]
+            array_header_includes += f'#include "{filename}"\n'
+            assert np.prod(input_value.shape) == np.prod(input_shape)
+            inits +=   f"    {input_name}[i] = {params_input_name}[i];\n"
+        else:
+            all_inputs_known = False
+            inits +=   f"    {input_name}[i] = 0;\n"
+        inits +=    "  }\n"
+        call +=    f"    .{input_name} = {input_name},\n"
+        frees +=   f"  free_wrapper({input_name});\n"
+
+    # Add code for comparing output with expected output if all input data and expected output is known
+    params_output_name = 'g_output'
+    if params_output_name in params.keys() and all_inputs_known:
+        output_value = params[params_output_name]
+        filename = gen_array_header(params_output_name, output_value)
+        del params[params_output_name]
+        array_header_includes += f'#include "{filename}"\n'
+
+        check_code_printf = r'      printf("Values at index %d differ: %f != %f\n", ' + \
+                            f'i, {params_output_name}[i], output[i]);\n' if use_printf else ''
+        check_code += \
+        f'  for (uint32_t i = 0; i < output_size; i++) {{\n' + \
+        f'    if ({params_output_name}[i] != output[i]) {{\n' + check_code_printf + \
+        f'      status = 1;\n' + \
+        f'    }}\n' + \
+        f'  }}\n\n'
+
+    # Generate other intermediate results headers if any. Those are not included in demo.c
+    # but can be useful for manual debugging when the output is not as expected.
+    for k, v in params.items():
+        if k.startswith('g_'):
+            gen_array_header(k, v)
+
+    mallocs += f"  {output_type_decl} *output = ({output_type_decl}*)malloc_wrapper(output_size * sizeof({output_type_decl}));\n\n"
+    frees +=    "  free_wrapper(output);\n"
+    sizes +=   f"  uint32_t output_size = {np.prod(output_shape)};\n\n"
+    call +=     "  };\n\n"
+
     # Now produce the final c code
     c_code = "#include <stdio.h>\n"  +\
              "#include <stdint.h>\n" +\
@@ -430,8 +487,8 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
              "#include <malloc_wrapper.h>\n" +\
              "#include <gdb_anchor.h>\n" +\
     analog_boot_include +\
+    array_header_includes +\
     "\n" +\
-    "int abs(int v) {return v * ((v > 0) - (v < 0)); }\n\n" +\
     "int main(int argc, char** argv) {\n" +\
     analog_boot_code +\
     "  // Sizes automatically added by utils.create_demo_file\n" +\
@@ -441,15 +498,17 @@ def create_demo_file(mod: tvm.ir.IRModule, directory: str = "build",
     call + \
     "  int32_t status = 0;\n" + \
     ("  while (status == 0){\n   " if indefinite else "") + \
-    "  status = tvmgen_default_run(&inputs, &outputs);\n" + \
+    "  status = tvmgen_default_run(&inputs, &outputs);\n\n" + \
     ("}\n" if indefinite else "") + \
-    "  gdb_anchor();" + \
+    "  gdb_anchor();\n" + \
+    check_code + \
     frees + \
     "  if(status != 0){\n" +\
     "    abort();\n" +\
     "  }\n" +\
     "  return 0;\n" +\
     "}\n"
+
     with open(directory/ "src/demo.c", "w") as file:
         file.writelines(c_code)
 
@@ -489,7 +548,7 @@ def make(device: str = "pulp", make_dir: str = ".", verbose: bool = False):
         makefile = "Makefile.pulprt"
     else:
         raise ValueError(f"Device: '{device}' not supported")
-    output = subprocess.run(["make", "-f", makefile, 
+    output = subprocess.run(["make", "-f", makefile,
                                          "all"], cwd=make_dir,
                                          check=True,
                                          stderr=subprocess.STDOUT,
@@ -541,7 +600,7 @@ def create_demo_gdb_scripts(dtype : str = "int8", directory: str = "."):
 
 def gdb(device: str, binary: str = None,
         directory: pathlib.Path = pathlib.Path("."),
-        gdb_script: str = None, 
+        gdb_script: str = None,
         verbose : bool = False) -> np.typing.NDArray:
     """
     Calls gdb run (batch mode) for binary with gdb_script on specified device
@@ -559,7 +618,7 @@ def gdb(device: str, binary: str = None,
         # Remove previous log before proceeding
         log.unlink(missing_ok=True)
         if binary is None:
-            binary = "demo" 
+            binary = "demo"
         if gdb_script is None:
             gdb_script = "gdb_demo_x86.sh"
         print(f"GDB: Running '{gdb_script}' on '{device}'...")
@@ -593,17 +652,17 @@ def gdb(device: str, binary: str = None,
 
 
 def gdb_x86(gdb_script: str, binary: str, verbose: bool = False) -> str:
-    output = subprocess.check_output(["gdb", binary, "-x", gdb_script, 
+    output = subprocess.check_output(["gdb", binary, "-x", gdb_script,
                                       "-batch"],
                                      stderr=subprocess.STDOUT,
-                                     timeout=3,
-                                     universal_newlines=True) 
+                                     timeout=10,
+                                     universal_newlines=True)
     if verbose:
         print(output)
     return output
 
 
-def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str: 
+def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     riscv_gdb = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-gdb"
     """
     NOTE for some reason this program exits with zero even after errors?
@@ -616,7 +675,7 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
                                           "-batch"],
                                          stderr=subprocess.STDOUT,
                                          timeout=timeout,
-                                         universal_newlines=True) 
+                                         universal_newlines=True)
     #except subprocess.TimeoutExpired as e:
     #    print(f"GDB timed out after {timeout} seconds! --> Output:")
     #    print("==================================================")
@@ -625,12 +684,12 @@ def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     if verbose:
         print(output)
     return output
-    
-def size_pulp(binary: str, verbose: bool = False) -> Dict[str,int]: 
+
+def size_pulp(binary: str, verbose: bool = False) -> Dict[str,int]:
     riscv_size = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-size"
     output = subprocess.check_output([riscv_size, binary],
                                      stderr=subprocess.STDOUT,
-                                     universal_newlines=True) 
+                                     universal_newlines=True)
     if verbose:
         print(output)
     out = [int(match.group()) for match in re.finditer("(\d+)", output,
