@@ -3,13 +3,14 @@ import mlperf_tiny.relay_ds_cnn
 import mlperf_tiny.relay_mobilenet
 import mlperf_tiny.relay_resnet
 import mlperf_tiny.relay_dae
+import os
 import pytest
 import tvm
 import tvm.relay as relay
 
 from tvm.driver.tvmc.model import TVMCModel
 from typing import Dict
-from driver import driver
+import driver
 
 
 def get_test_params():
@@ -63,7 +64,7 @@ def test_conv2d(run, test_params, tmp_path):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run, tmp_path)
+    driver.driver(ir_module, params, run, tmp_path)
 
 
 @pytest.mark.parametrize("test_params", test_params, ids=test_ids)
@@ -83,7 +84,7 @@ def test_dw_conv2d(run, test_params, tmp_path):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run, tmp_path)
+    driver.driver(ir_module, params, run, tmp_path)
 
 
 @pytest.mark.parametrize("weight_bits", [8], ids = ["digital"])
@@ -98,7 +99,7 @@ def test_dense(run, weight_bits, act, tmp_path):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run, tmp_path)
+    driver.driver(ir_module, params, run, tmp_path)
 
 
 def test_add(run, tmp_path):
@@ -109,7 +110,7 @@ def test_add(run, tmp_path):
         shift_bits = 4
             )
     # Run the test
-    driver(ir_module, params, run, tmp_path)
+    driver.driver(ir_module, params, run, tmp_path)
 
     
 def run_full_network(run, directory, network):
@@ -119,7 +120,12 @@ def run_full_network(run, directory, network):
         # Disable manually inserted layout transforms
         add_layout_transforms = False,
         mixed = False)
-    driver(ir_module, params, run, directory)
+    driver.driver(ir_module, params, run, directory)
+
+
+###
+#   Full network tests, network defined in relay
+###
 
 
 def test_mlperf_tiny_ds_cnn(run, tmp_path):
@@ -136,3 +142,47 @@ def test_mlperf_tiny_mobilenet(run, tmp_path):
 
 def test_mlperf_tiny_dae(run, tmp_path):
     run_full_network(run, tmp_path, mlperf_tiny.relay_dae.create_model)
+
+
+###
+#   Full network tests, network defined in ONNX
+###
+
+
+def run_onnx_x86(onnx_file: str, directory: str):
+    """Compile and run an ONNX model on x86
+    """
+    # ensure .npy files are present to get numeric checking too
+    onnx_dir = os.path.dirname(onnx_file)
+    assert os.path.exists(os.path.join(onnx_dir, 'input.npy'))
+    assert os.path.exists(os.path.join(onnx_dir, 'output.npy'))
+
+    mod, params = driver.parse_onnx_input(onnx_file)
+    d = driver.X86Driver(mod, params, directory)
+    d.tvm_compile()
+    d.gcc_compile(gcc_opt=0)
+    d.run(gdb=False)   # raises exception on failure
+
+
+def test_mlperf_tiny_ds_cnn_onnx_x86(run, tmp_path):
+    run_onnx_x86('test_data/export_dscnn/DSCNN_QL_NOANNOTATION.onnx', tmp_path)
+
+
+def test_mlperf_tiny_resnet_onnx_x86(run, tmp_path):
+    run_onnx_x86('test_data/export_resnet8/ResNet_QL_NOANNOTATION.onnx', tmp_path)
+
+
+def test_mlperf_tiny_mobilenet_onnx_x86(run, tmp_path):
+    run_onnx_x86('test_data/export_mobilenetv1/MobileNet_QL_NOANNOTATION.onnx', tmp_path)
+
+
+def test_mlperf_tiny_dae_onnx_x86(run, tmp_path):
+    run_onnx_x86('test_data/export_dae/DAE_QL_NOANNOTATION.onnx', tmp_path)
+
+
+def test_cifar10_resnet20_onnx_x86(run, tmp_path):
+    run_onnx_x86('test_data/export_resnet20/ResNet_QL_NOANNOTATION.onnx', tmp_path)
+
+
+def test_cifar10_mobilenetv2_onnx_x86(run, tmp_path):
+    run_onnx_x86('test_data/export_mobilenetv2/MobileNetV2_QL_NOANNOTATION.onnx', tmp_path)

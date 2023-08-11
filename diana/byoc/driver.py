@@ -144,11 +144,17 @@ class X86Driver(Driver):
         utils.adapt_gcc_opt(self.build_dir/"Makefile.x86", gcc_opt)
         utils.make(self.device, make_dir=self.build_dir)
 
-    def run(self):
-        result_x86 = utils.gdb(device=self.device, binary="demo",
-                               gdb_script="gdb_demo_x86.sh",
-                               directory=self.build_dir)
-        return result_x86
+    def run(self, gdb=True):
+        if gdb:
+            result_x86 = utils.gdb(device=self.device, binary="demo",
+                                   gdb_script="gdb_demo_x86.sh",
+                                   directory=self.build_dir)
+            return result_x86
+        else:
+            # run binary and raise a assertion exception if the binary's return code
+            # is different from zero
+            utils.run_x86(self.build_dir/"demo")
+
 
 class DianaDriver(Driver):
     def __init__(self,
@@ -263,6 +269,32 @@ class DianaDriver(Driver):
         return result
 
 
+def parse_onnx_input(filename: str):
+    """Parse onnx model file and run high level relay transformations, specific to DIANA
+
+    This function also checks if the parent directory of `filename` contains `.npy` files.
+    If yes, these are parsed as well and stored in the params dict.
+    These are later used in create_demo_file
+
+    filename:   Path to the ONNX file
+
+    Returns the parsed IR module and parameters dict
+    """
+    onnx_model = onnx.load(filename)
+    ir_module, params = relay.frontend.from_onnx(onnx_model, freeze_params=True)
+    # Diana quantlib specific interpretation pass
+    ir_module = DianaOnnxIntegerize()(ir_module)
+
+    # Check for .npy files. If yes, parse them and store them in params
+    for fname in pathlib.Path(filename).parent.glob('*.npy'):
+        # We add `g_` as prefix to avoid TVM from treating them as model constants
+        # than can be constant-folded if their name matches a variable in the IR module
+        param_name = 'g_' + fname.stem
+        params[param_name] = np.load(fname)
+
+    return ir_module, params
+
+
 def driver(mod: tvm.ir.IRModule, 
            params: Dict[str, tvm.nd.array],
            run: bool = False, build_dir: pathlib.Path = "build",
@@ -365,18 +397,7 @@ if __name__ == "__main__":
 
     # Running with --net overrides some options
     if args.onnx is not None:
-        onnx_model = onnx.load(args.onnx)
-        ir_module, params = relay.frontend.from_onnx(onnx_model, freeze_params=True)
-        # Diana quantlib specific interpretation pass
-        ir_module = DianaOnnxIntegerize()(ir_module)
-
-        # Check if the same folder as args.onnx contains .npy files. If yes, parse them and
-        # store them in params. These are later used in create_demo_file
-        for fname in pathlib.Path(args.onnx).parent.glob('*.npy'):
-            # We add `g_` as prefix to avoid TVM from treating them as model constants
-            # than can be constant-folded if their name matches a variable in the IR module
-            param_name = 'g_' + fname.stem
-            params[param_name] = np.load(fname)
+        ir_module, params = parse_onnx_input(args.onnx)
 
     elif args.network is not None:
         # Defaults

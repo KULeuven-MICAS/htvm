@@ -662,6 +662,13 @@ def gdb_x86(gdb_script: str, binary: str, verbose: bool = False) -> str:
     return output
 
 
+def run_x86(binary: str):
+    """Run a binary and check its return code. If nonzero, raise an assertion error.
+    """
+    ret = subprocess.run([binary])
+    assert ret.returncode == 0, f"Return code is non zero: {ret.returncode}"
+
+
 def gdb_pulp(gdb_script: str, binary: str, verbose: bool = False) -> str:
     riscv_gdb = "/pulp-riscv-gnu-toolchain/bin/riscv32-unknown-elf-gdb"
     """
