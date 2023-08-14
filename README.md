@@ -127,8 +127,10 @@ pytest -v test.py
 
 ## Project Status
 
-HTVM currently supports deploying a number of tested neural network on the [Diana heterogeneous SoC](https://doi.org/10.1109/ISSCC42614.2022.9731716).
-The front-end with support for ingesting quantized neural networks on ONNX format from [Quantlib](https://github.com/pulp-platform/quantlib/) is working.
+HTVM currently supports deploying a number of tested neural networks on the [Diana heterogeneous SoC](https://doi.org/10.1109/ISSCC42614.2022.9731716).
+
+The front-end supports ingesting quantized neural networks in ONNX format from [Quantlib](https://github.com/pulp-platform/quantlib/).
+
 
 ## License
 
