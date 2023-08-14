@@ -1,7 +1,7 @@
 # HTVM
  _Efficient Neural Network Deployment on Heterogenous TinyML Platforms_
 
-![CI](https://github.com/KULeuven-MICAS/htvm/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/KULeuven-MICAS/htvm/actions/workflows/ci.yml/badge.svg)](https://github.com/KULeuven-MICAS/htvm/actions)
 
 
 HTVM is a deep learning compiler for deploying neural networks on heterogeneous embedded compute platforms with multiple scratchpad-managed accelerators.
@@ -13,12 +13,7 @@ To do this, HTVM mainly relies on:
 
 ## Requirements
 
-HTVM has many requirements, and due to the complex setup requirements we generally advise against installing locally.
-It is recommended to use the container approach instead.
-To use the container approach you need:
-* Docker or Podman
-
-HTVM mainly requires on the following:
+Main requirements:
 
 * TVM (contained in this repository) and tools to compile TVM.
 * [DORY](https://github.com/pulp-platform/dory) version `8a0fe7bcadb207c6d80820a4bd2c2f2c0e823248`
@@ -29,21 +24,45 @@ For DIANA, HTVM also requires:
 * DORY Backend [kernels for DIANA](https://github.com/Aburrello/dory-hal)
 * The [PULP RISC-V GNU Toolchain](https://github.com/pulp-platform/pulp-riscv-gnu-toolchain/)
 
-People who still wish to install locally, should take a look at this [Dockerfile](https://github.com/KULeuven-MICAS/htvm/blob/main/diana/docker/Dockerfile.tvm).
+For your convenience, we advise to use our docker container with all dependencies installed, needed for building TVM.
 
-## Running HTVM inside of a container
+## Installation in a container
 
-This approach provides builds a container in which all requirements are installed and only requires you to build HTVM before you can get started. Here we use podman, but the instructions should also work with docker.
+We use `podman` commands here, but note that you can use `docker` as well if preferred.
 
+### Getting the docker image
 
+Our github CI has an up-to-date image available that you can pull with:
+```sh
+podman pull ghcr.io/kuleuven-micas/htvm:main
+```
+
+Or you could build the container image locally with:
 ```sh
 git clone --recursive https://github.com/KULeuven-MICAS/htvm
 cd htvm
-podman build . -f diana/docker/Dockerfile.tvm -t tvm-fork
+podman build . -f diana/docker/Dockerfile.tvm -t htvm:main
 ```
-After the container is created you can proceed with building the compiler (this only has to be done once):
+
+> [!NOTE]
+> See the [Dockerfile](https://github.com/KULeuven-MICAS/htvm/blob/main/diana/docker/Dockerfile.tvm) in case you want to attempt installation without a container.
+
+### Building HTVM
+
+If you haven't already cloned the repo, do:
 ```sh
-podman run -itv=`pwd`:/tvm-fork:z tvm-fork
+git clone --recursive https://github.com/KULeuven-MICAS/htvm
+cd htvm
+```
+
+Now create and start a container:
+```sh
+podman run -itv=`pwd`:/tvm-fork:z htvm:main
+```
+
+Inside the container shell run:
+
+```sh
 mkdir build
 cp diana/config.cmake build
 cd build
@@ -51,20 +70,65 @@ cmake ..
 make -j$(nproc)
 cd ..
 ```
-Now you should be able to run the tests from inside the container
+
+Test if it works (also run from inside the container):
+
+```sh
+cd diana/byoc
+python3 driver.py -h
+```
+
+## Compiling an ONNX model
+
+A number of ONNX example models, quantized by [diana-quantlib](https://github.com/KULeuven-MICAS/diana-quantlib), are provided in this repo through git LFS.
+For quantizing your own models, see [diana-quantlib](https://github.com/KULeuven-MICAS/diana-quantlib).
+
+Download the model data with:
+
+```sh
+git lfs pull
+```
+
+Compile a model for DIANA with digital acceleration:
+```sh
+python3 driver.py --no-run --onnx test_data/export_resnet8/ResNet_QL_NOANNOTATION.onnx
+```
+
+Output C-code and pulp binaries can be found at `/tmp/digital_pulp_dory_fused_O3_None/pulp/`.
+
+Compiling a model for running on the CPU of your local machine:
+```sh
+python3 driver.py --no-run --device x86 --target c --onnx test_data/export_resnet8/ResNet_QL_NOANNOTATION.onnx
+```
+
+Output C-code and x86 binaries can be found at `/tmp/digital_x86_c_fused_O3_None/x86`.
+
+Run it locally with:
+```sh
+/tmp/digital_x86_c_fused_O3_None/x86/demo
+```
+
+## Running tests
+
+In addition to the standard test suite, provided by TVM, HTVM contains its own additional unit tests and end-to-end test.
+
+The unit tests can be run with:
+```sh
+cd /path/to/htvm
+pytest -v tests/python/contrib/test_soma_dory
+```
+
+The end-to-end tests rely on example ONNX files that are tracked with git lfs. Run `git lfs pull` in case you haven't done that already.
+Now run:
 ```sh
 cd diana/byoc
 pytest -v test.py
 ```
-The HTVM compiler driver is now also available inside the container:
-```sh
-python3 /tvm-fork/diana/byoc/driver.py -h
-```
 
 ## Project Status
 
-HTVM currently supports deploying several neural networks on the [Diana heterogeneous SoC](https://doi.org/10.1109/ISSCC42614.2022.9731716).
-A front-end with support for ingesting quantized neural networks from [Quantlib](https://github.com/pulp-platform/quantlib/) is work-in-progress.
+HTVM currently supports deploying a number of tested neural network on the [Diana heterogeneous SoC](https://doi.org/10.1109/ISSCC42614.2022.9731716).
+The front-end with support for ingesting quantized neural networks on ONNX format from [Quantlib](https://github.com/pulp-platform/quantlib/) is working.
 
 ## License
 
