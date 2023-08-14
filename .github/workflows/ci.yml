@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: build
-          key: ${{ hashFiles('~/src', '~/cmake', '~/include') }}
+          key: ${{ hashFiles('src', 'cmake', 'include') }}
       - name: Build HTVM Release
         if: steps.cache-build.outputs.cache-hit != 'true'
         uses: addnab/docker-run-action@v3
