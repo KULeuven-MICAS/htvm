@@ -309,7 +309,7 @@ def driver(mod: tvm.ir.IRModule,
     # Create the model library format file and unpack
     d_diana = DianaDriver(mod, params, build_dir=build_dir,
                           byoc_path=byoc_path)
-    d_diana.tvm_compile(fusion=True, target="soma_dory -layout_transform=0, c")
+    d_diana.tvm_compile(fusion=True, target="soma_dory, c")
     d_diana.add_profiler(measurement="global")
     d_diana.gcc_compile(gcc_opt=3)
     # Make for DIANA
