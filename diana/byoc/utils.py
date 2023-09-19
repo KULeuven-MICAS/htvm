@@ -374,7 +374,7 @@ def create_demo_file(model: TVMCModel, directory: str = "build",
     https://discuss.tvm.apache.org/t/how-to-get-the-input-and-output-of-relay-call-node/8743
     '''
     mod = model.mod
-    params = model.params
+    params = model.params.copy()    # work with copy, we might remove entries in this dict
     directory = pathlib.Path(directory)
     def get_c_type(dtype):
         if dtype == "int8":

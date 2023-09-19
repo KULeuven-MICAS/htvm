@@ -67,6 +67,37 @@ def test_conv2d(run, test_params, tmp_path):
     driver.driver(ir_module, params, run, tmp_path)
 
 
+@pytest.mark.parametrize("kernel_size, padding", [((1, 1), (0, 0)), ((3, 3), (1, 1)), ((5, 5), (2, 2))])
+def test_conv2d_reproduce_bug(run, tmp_path, kernel_size, padding):
+    """Test to reproduce bug digital accelerator. Investigation needed.
+    """
+    import utils
+    import single_layer.relay_conv2d
+
+    # Set random seed for reproducible testing
+    np.random.seed(0)
+
+    ir_module, params = single_layer.relay_conv2d.create_model(
+        input_shape = (1, 3, 32, 32),
+        weights_shape = tuple([16, 3] + list(kernel_size)),
+        weight_bits = 8,
+        act = False,
+        padding = padding,
+        strides = (1, 1),
+        shift_bits = 5
+            )
+
+    # set bias to zero (or small numbers are also fine), which is the trick that uncovered the bug
+    params['conv1.bias'] = utils.numpy_to_array(np.zeros(16, dtype='int32'), 'int32')
+
+    # load some known input, not all the same number
+    input_data = np.load('test_data/export_resnet8/input.npy')
+    params['g_input_0'] = (input_data * 64).astype('int8')
+
+    # Run the layer on diana and x86 and compare outputs
+    driver.driver(ir_module, params, run, tmp_path)
+
+
 @pytest.mark.parametrize("test_params", test_params, ids=test_ids)
 def test_dw_conv2d(run, test_params, tmp_path):
     weight_bits, act, strides, kernel_and_padding = test_params
