@@ -131,6 +131,21 @@ HTVM currently supports deploying a number of tested neural networks on the [Dia
 
 The front-end supports ingesting quantized neural networks in ONNX format from [Quantlib](https://github.com/pulp-platform/quantlib/).
 
+## Publications
+
+[HTVM was presented at the 60th Design Automation Conference (DAC)](https://doi.org/10.1109/DAC56929.2023.10247664).
+If you use this work in your publication, please cite:
+```bibtex
+@INPROCEEDINGS{10247664,
+  author={Van Delm, Josse and Vandersteegen, Maarten and Burrello, Alessio and Sarda, Giuseppe Maria and Conti, Francesco and Pagliari, Daniele Jahier and Benini, Luca and Verhelst, Marian},
+  booktitle={2023 60th ACM/IEEE Design Automation Conference (DAC)}, 
+  title={HTVM: Efficient Neural Network Deployment On Heterogeneous TinyML Platforms}, 
+  year={2023},
+  volume={},
+  number={},
+  pages={1-6},
+  doi={10.1109/DAC56929.2023.10247664}}
+```
 
 ## License
 
